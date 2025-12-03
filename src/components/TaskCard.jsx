@@ -1,5 +1,6 @@
 import React from 'react';
 import { Icons } from './ui/Icons';
+import { formatDate } from '../utils/helpers';
 import { Linkify, COLOR_MAP } from '../utils/helpers';
 
 
@@ -25,8 +26,7 @@ const TaskCard = ({ task, onClick, onDelete, onUpdate, onMove, color, cardConfig
     const ORDER_OPTIONS = cardConfig?.orderOptions || DEFAULT_ORDER_OPTIONS;
 
     const formatTimeShort = (timestamp) => {
-        const date = new Date(timestamp);
-        return date.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        return formatDate(timestamp, true);
     };
 
     // Dynamic border class based on prop
@@ -96,7 +96,7 @@ const TaskCard = ({ task, onClick, onDelete, onUpdate, onMove, color, cardConfig
                 <div className="flex items-center gap-3">
                     <div className="flex items-center text-gray-500 text-xs" title="Fecha de creación">
                         <Icons.Calendar />
-                        <span className="ml-1">{new Date(task.createdAt).toLocaleDateString()}</span>
+                        <span className="ml-1">{formatDate(task.createdAt)}</span>
                     </div>
                     {commentCount > 0 && (
                         <div className="flex items-center text-indigo-400 text-xs">

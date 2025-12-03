@@ -28,3 +28,20 @@ export const Linkify = ({ text }) => {
         </>
     );
 };
+
+export const formatDate = (timestamp, includeTime = false) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    const options = {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    };
+
+    if (includeTime) {
+        options.hour = '2-digit';
+        options.minute = '2-digit';
+    }
+
+    return date.toLocaleString('es-ES', options);
+};
