@@ -1,4 +1,5 @@
 import React from 'react';
+import { Droppable } from '@hello-pangea/dnd';
 import { Icons } from './ui/Icons';
 import TaskCard from './TaskCard';
 import { COLOR_MAP } from '../utils/helpers';
@@ -12,12 +13,15 @@ const Column = ({ column, tasks, allColumns, onAdd, onTaskClick, onDelete, onUpd
     const toggleCollapse = () => { onUpdateColumn(column.id, { isCollapsed: !column.isCollapsed }); };
 
     return (
-        <div className={`flex-shrink-0 flex flex-col h-full max-h-full transition-all duration-300 ${column.isCollapsed ? 'w-16' : 'w-80'}`}>
-            <div className={`glass-panel p-3 rounded-t-xl border-t-4 ${borderClass} flex flex-col mb-1 relative`} style={borderStyle}>
+        <div
+            className={`flex-shrink-0 flex flex-col h-full max-h-full transition-all duration-300 ${column.isCollapsed ? 'w-16' : ''}`}
+            style={!column.isCollapsed ? { width: 'var(--column-width)' } : {}}
+        >
+            <div className={`glass-panel p-3 rounded-t-xl ${borderClass} flex flex-col mb-1 relative dark:!bg-[#1b2537]`} style={{ borderTopWidth: '2px', borderTopStyle: 'solid', ...borderStyle }}>
                 <div className="flex justify-between items-center">
                     {!column.isCollapsed && (
                         <div className="flex items-center gap-2 overflow-hidden">
-                            <h2 className="font-bold text-gray-200 text-lg tracking-wide truncate" title={column.title}>{column.title}</h2>
+                            <h2 className="font-bold text-[var(--text-primary)] text-base tracking-wide truncate" title={column.title}>{column.title}</h2>
                             <span className="bg-white/10 text-gray-400 text-xs px-2 py-0.5 rounded-full">{columnTasks.length}</span>
                         </div>
                     )}
@@ -38,13 +42,22 @@ const Column = ({ column, tasks, allColumns, onAdd, onTaskClick, onDelete, onUpd
                 )}
             </div>
             {!column.isCollapsed && (
-                <div className="flex-1 overflow-y-auto p-2 space-y-3 custom-scrollbar">
-                    {columnTasks.length === 0 ? (
-                        <div className="text-center py-10 opacity-20 border-2 border-dashed border-gray-700 rounded-xl"><p className="text-sm text-gray-400">Vacío</p></div>
-                    ) : (
-                        columnTasks.map(task => <TaskCard key={task.id} task={task} onClick={onTaskClick} onDelete={onDelete} onUpdate={onUpdateTask} onMove={onMoveTask} color={column.color} cardConfig={column.cardConfig} columns={allColumns} />)
+                <Droppable droppableId={column.id}>
+                    {(provided) => (
+                        <div
+                            {...provided.droppableProps}
+                            ref={provided.innerRef}
+                            className="flex-1 overflow-y-auto p-2 flex flex-col gap-3 custom-scrollbar"
+                        >
+                            {columnTasks.length === 0 ? (
+                                <div className="text-center py-10 opacity-20 border-2 border-dashed border-gray-700 rounded-xl"><p className="text-sm text-gray-400">Vacío</p></div>
+                            ) : (
+                                columnTasks.map((task, index) => <TaskCard key={task.id} task={task} index={index} onClick={onTaskClick} onDelete={onDelete} onUpdate={onUpdateTask} onMove={onMoveTask} color={column.color} cardConfig={column.cardConfig} columns={allColumns} />)
+                            )}
+                            {provided.placeholder}
+                        </div>
                     )}
-                </div>
+                </Droppable>
             )}
         </div>
     );
