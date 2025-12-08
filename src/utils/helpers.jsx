@@ -45,3 +45,55 @@ export const formatDate = (timestamp, includeTime = false) => {
 
     return date.toLocaleString('es-ES', options);
 };
+
+export const TIME_UNITS = [
+    { value: 'minutes', label: 'Minuto/s' },
+    { value: 'hours', label: 'Hora/s' },
+    { value: 'days', label: 'Día/s' },
+    { value: 'weeks', label: 'Semana/s' },
+    { value: 'months', label: 'Mes/es' },
+    { value: 'years', label: 'Año/s' }
+];
+
+export const getEffectiveCardReminder = (card, column) => {
+    if (card?.reminder_enabled) {
+        return {
+            enabled: true,
+            value: card.reminder_value,
+            unit: card.reminder_unit
+        };
+    }
+
+    if (column?.default_reminder_enabled) {
+        return {
+            enabled: true,
+            value: column.default_reminder_value,
+            unit: column.default_reminder_unit
+        };
+    }
+
+    return null;
+};
+
+export const calculateNextNotification = (value, unit) => {
+    if (!value) return null;
+    const numValue = parseInt(value);
+    if (isNaN(numValue)) return null;
+
+    let multiplier = 1000 * 60; // minutes default
+    switch (unit) {
+        case 'hours': multiplier = 1000 * 60 * 60; break;
+        case 'days': multiplier = 1000 * 60 * 60 * 24; break;
+        case 'weeks': multiplier = 1000 * 60 * 60 * 24 * 7; break;
+        case 'months': multiplier = 1000 * 60 * 60 * 24 * 30; break;
+        case 'years': multiplier = 1000 * 60 * 60 * 24 * 365; break;
+        default: multiplier = 1000 * 60; // minutes
+    }
+
+    return Date.now() + (numValue * multiplier);
+};
+
+export const isReminderActive = (task) => {
+    if (!task || !task.next_notification_at) return false;
+    return Date.now() >= task.next_notification_at;
+};

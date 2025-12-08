@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { DragDropContext } from '@hello-pangea/dnd';
+import { calculateNextNotification } from '../utils/helpers';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import Column from './Column';
 import CreateTaskModal from './modals/CreateTaskModal';
 import ColumnModal from './modals/ColumnModal';
@@ -17,7 +18,24 @@ const KanbanBoard = ({ initialColumns, onColumnsChange }) => {
 
     const handleAddTask = (columnTitle) => { setCreatingTaskColumn(columnTitle); };
     const handleSaveTask = (taskData) => {
-        const newTask = { id: Date.now(), title: taskData.title, description: taskData.description, createdAt: Date.now(), comments: taskData.initialComment ? [{ id: Date.now(), text: taskData.initialComment, createdAt: Date.now() }] : [] };
+        const newTask = {
+            id: Date.now(),
+            title: taskData.title,
+            description: taskData.description,
+            createdAt: Date.now(),
+            comments: taskData.initialComment ? [{ id: Date.now(), text: taskData.initialComment, createdAt: Date.now() }] : [],
+            // Default reminder settings for new tasks
+            reminder_enabled: false,
+            reminder_value: null,
+            reminder_unit: 'minutes',
+            next_notification_at: null
+        };
+
+        // Apply column defaults if enabled
+        const targetColumn = columns.find(c => c.title === creatingTaskColumn);
+        if (targetColumn && targetColumn.default_reminder_enabled) {
+            newTask.next_notification_at = calculateNextNotification(targetColumn.default_reminder_value, targetColumn.default_reminder_unit);
+        }
         const newColumns = columns.map(col => { if (col.title === creatingTaskColumn) { return { ...col, cards: [...(col.cards || []), newTask] }; } return col; });
         updateColumns(newColumns); setCreatingTaskColumn(null);
     };
@@ -51,7 +69,7 @@ const KanbanBoard = ({ initialColumns, onColumnsChange }) => {
     const handleUpdateColumn = (colId, updates) => { const newColumns = columns.map(c => c.id === colId ? { ...c, ...updates } : c); updateColumns(newColumns); };
 
     const onDragEnd = (result) => {
-        const { destination, source } = result;
+        const { destination, source, type } = result;
 
         if (!destination) return;
 
@@ -59,6 +77,15 @@ const KanbanBoard = ({ initialColumns, onColumnsChange }) => {
             destination.droppableId === source.droppableId &&
             destination.index === source.index
         ) {
+            return;
+        }
+
+        // Handle Column Sorting
+        if (type === 'column') {
+            const newColumns = Array.from(columns);
+            const [movedColumn] = newColumns.splice(source.index, 1);
+            newColumns.splice(destination.index, 0, movedColumn);
+            updateColumns(newColumns);
             return;
         }
 
@@ -84,7 +111,15 @@ const KanbanBoard = ({ initialColumns, onColumnsChange }) => {
         const [movedCard] = startCards.splice(source.index, 1);
 
         // Update task status to match new column
-        const updatedCard = { ...movedCard, status: finishColumn.title };
+        let updatedCard = { ...movedCard, status: finishColumn.title };
+
+        // Recalculate notification if moving to a column with defaults AND card doesn't have manual override
+        if (!updatedCard.reminder_enabled && finishColumn.default_reminder_enabled) {
+            updatedCard.next_notification_at = calculateNextNotification(finishColumn.default_reminder_value, finishColumn.default_reminder_unit);
+        } else if (!updatedCard.reminder_enabled && !finishColumn.default_reminder_enabled) {
+            // If moving to a column without defaults and no manual override, clear the notification
+            updatedCard.next_notification_at = null;
+        }
 
         const finishCards = Array.from(finishColumn.cards || []);
         finishCards.splice(destination.index, 0, updatedCard);
@@ -100,15 +135,50 @@ const KanbanBoard = ({ initialColumns, onColumnsChange }) => {
 
     return (
         <DragDropContext onDragEnd={onDragEnd}>
-            <div className="flex-1 overflow-x-auto overflow-y-hidden">
-                <div className="h-full flex p-6 gap-6">
-                    {columns.map(col => (<Column key={col.id} column={col} tasks={allTasks} allColumns={columns} onAdd={handleAddTask} onTaskClick={setEditingTask} onDelete={handleDeleteTask} onUpdateTask={handleUpdateTask} onMoveTask={handleMoveTask} onUpdateColumn={handleUpdateColumn} onEditColumn={setEditingColumn} />))}
-                    <div className="w-40 flex-shrink-0"><button onClick={() => setEditingColumn({ isCreating: true })} className="w-full h-12 border-2 border-dashed border-white/10 rounded-xl flex items-center justify-center text-gray-500 hover:text-white hover:border-white/20 transition-all">+ Añadir Columna</button></div>
-                </div>
-                {creatingTaskColumn && (<CreateTaskModal columnTitle={creatingTaskColumn} onClose={() => setCreatingTaskColumn(null)} onSave={handleSaveTask} />)}
-                {editingColumn && (<ColumnModal column={editingColumn.isCreating ? null : editingColumn} isCreating={editingColumn.isCreating} onClose={() => setEditingColumn(null)} onUpdate={(idOrData, data) => { if (editingColumn.isCreating) { const newCol = { id: Date.now().toString(), title: idOrData.title, color: idOrData.color, cardConfig: idOrData.cardConfig, cards: [] }; updateColumns([...columns, newCol]); } else { handleUpdateColumn(idOrData, data); } }} onDelete={(colId) => { updateColumns(columns.filter(c => c.id !== colId)); setEditingColumn(null); }} />)}
-                {editingTask && (<TaskDetailModal key={editingTask.id} task={editingTask} columns={columns} onClose={() => setEditingTask(null)} onUpdate={(updated) => { handleUpdateTask(updated); setEditingTask(null); }} onDelete={(taskId) => { handleDeleteTask(taskId); setEditingTask(null); }} />)}
-            </div>
+            <Droppable droppableId="all-columns" direction="horizontal" type="column">
+                {(provided) => (
+                    <div
+                        className="flex-1 overflow-x-auto overflow-y-hidden"
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                    >
+                        <div className="h-full flex p-6 gap-6" style={{ minWidth: 'max-content' }}>
+                            {columns.map((col, index) => (
+                                <Draggable key={col.id} draggableId={col.id} index={index}>
+                                    {(provided, snapshot) => (
+                                        <Column
+                                            column={col}
+                                            tasks={allTasks}
+                                            allColumns={columns}
+                                            onAdd={handleAddTask}
+                                            onTaskClick={setEditingTask}
+                                            onDelete={handleDeleteTask}
+                                            onUpdateTask={handleUpdateTask}
+                                            onMoveTask={handleMoveTask}
+                                            onUpdateColumn={handleUpdateColumn}
+                                            onEditColumn={setEditingColumn}
+                                            provided={provided}
+                                            snapshot={snapshot}
+                                        />
+                                    )}
+                                </Draggable>
+                            ))}
+                            {provided.placeholder}
+                            <div className="w-40 flex-shrink-0">
+                                <button
+                                    onClick={() => setEditingColumn({ isCreating: true })}
+                                    className="w-full h-12 border-2 border-dashed border-white/10 rounded-xl flex items-center justify-center text-gray-500 hover:text-white hover:border-white/20 transition-all"
+                                >
+                                    + Añadir Columna
+                                </button>
+                            </div>
+                        </div>
+                        {creatingTaskColumn && (<CreateTaskModal columnTitle={creatingTaskColumn} onClose={() => setCreatingTaskColumn(null)} onSave={handleSaveTask} />)}
+                        {editingColumn && (<ColumnModal column={editingColumn.isCreating ? null : editingColumn} isCreating={editingColumn.isCreating} onClose={() => setEditingColumn(null)} onUpdate={(idOrData, data) => { if (editingColumn.isCreating) { const newCol = { id: Date.now().toString(), title: idOrData.title, color: idOrData.color, cardConfig: idOrData.cardConfig, cards: [] }; updateColumns([...columns, newCol]); } else { handleUpdateColumn(idOrData, data); } }} onDelete={(colId) => { updateColumns(columns.filter(c => c.id !== colId)); setEditingColumn(null); }} />)}
+                        {editingTask && (<TaskDetailModal key={editingTask.id} task={editingTask} columns={columns} onClose={() => setEditingTask(null)} onUpdate={(updated) => { handleUpdateTask(updated); setEditingTask(null); }} onDelete={(taskId) => { handleDeleteTask(taskId); setEditingTask(null); }} />)}
+                    </div>
+                )}
+            </Droppable>
         </DragDropContext>
     );
 };

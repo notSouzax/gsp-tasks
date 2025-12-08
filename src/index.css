@@ -8,7 +8,7 @@
     --text-primary: #f3f4f6;
     --text-secondary: #9ca3af;
     --border-color: rgba(255, 255, 255, 0.1);
-    --column-width: 320px;
+    --column-width: 365px;
     --font-size-base: 14px;
     --spacing-unit: 1rem;
 }
@@ -59,4 +59,29 @@ body {
 
 .writing-vertical {
     writing-mode: vertical-rl;
+}
+
+/* NUCLEAR OPTION: Fixed Column Width */
+.fixed-width-column {
+    width: var(--column-width, 365px) !important;
+    min-width: var(--column-width, 365px) !important;
+    max-width: var(--column-width, 365px) !important;
+    flex: 0 0 var(--column-width, 365px) !important;
+}
+
+.collapsed-column {
+    width: 4rem !important;
+    min-width: 4rem !important;
+    max-width: 4rem !important;
+    flex: 0 0 4rem !important;
+}
+
+/*
+   Custom transition that ONLY affects sizing properties.
+   This is critical to avoid conflicting with @hello-pangea/dnd's 'transform' animations.
+*/
+.column-size-transition {
+    transition-property: width, min-width, max-width, flex-basis, flex-grow, flex-shrink;
+    transition-duration: 300ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }

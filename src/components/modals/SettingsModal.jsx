@@ -97,20 +97,7 @@ const SettingsModal = ({ onClose }) => {
                                         className="w-full h-2 bg-[var(--bg-primary)] rounded-lg appearance-none cursor-pointer accent-indigo-500"
                                     />
                                 </div>
-                                <div>
-                                    <div className="flex justify-between mb-2">
-                                        <label className="text-sm font-medium text-[var(--text-primary)]">Tamaño de Fuente</label>
-                                        <span className="text-xs text-[var(--text-secondary)]">{settings.fontSize}px</span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min="12"
-                                        max="18"
-                                        value={settings.fontSize}
-                                        onChange={(e) => updateSettings({ fontSize: parseInt(e.target.value) })}
-                                        className="w-full h-2 bg-[var(--bg-primary)] rounded-lg appearance-none cursor-pointer accent-indigo-500"
-                                    />
-                                </div>
+
                             </section>
                         </div>
                     )}

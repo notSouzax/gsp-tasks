@@ -1,13 +1,32 @@
 import React from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { Icons } from './ui/Icons';
-import { formatDate } from '../utils/helpers';
+import { formatDate, TIME_UNITS, getEffectiveCardReminder, isReminderActive } from '../utils/helpers';
 import { Linkify, COLOR_MAP } from '../utils/helpers';
 
 
 const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, cardConfig, columns }) => {
     const commentCount = task.comments ? task.comments.length : 0;
     const lastComment = commentCount > 0 ? task.comments[task.comments.length - 1] : null;
+
+    const currentColumn = columns?.find(c => c.title === task.status);
+    const effectiveReminder = getEffectiveCardReminder(task, currentColumn);
+
+    // Force re-render when reminder is due
+    const [_, setTick] = React.useState(0);
+    React.useEffect(() => {
+        if (!task.next_notification_at) return;
+
+        const now = Date.now();
+        const timeUntilDue = task.next_notification_at - now;
+
+        if (timeUntilDue > 0) {
+            const timer = setTimeout(() => {
+                setTick(t => t + 1);
+            }, timeUntilDue);
+            return () => clearTimeout(timer);
+        }
+    }, [task.next_notification_at]);
 
     // Config defaults
     const config = {
@@ -51,7 +70,7 @@ const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, car
                         {...provided.draggableProps}
                         {...provided.dragHandleProps}
                         onClick={() => onClick(task)}
-                        className={`glass-panel p-4 rounded-xl cursor-pointer group ${borderClass} shadow-lg shadow-black/20 dark:!bg-[#1b2537]`}
+                        className={`glass-panel p-4 rounded-xl cursor-pointer group ${borderClass} shadow-lg shadow-black/20 dark:!bg-[#1b2537] w-full max-w-full break-words`}
                         style={{ borderTopWidth: '2px', borderTopStyle: 'solid', borderTopColor: borderColor, ...provided.draggableProps.style }}
                     >
                         <h3 className="font-semibold text-[var(--text-primary)] text-base leading-tight mb-1">{task.title}</h3>
@@ -72,12 +91,20 @@ const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, car
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
                     onClick={() => onClick(task)}
-                    className={`glass-panel p-4 rounded-xl cursor-pointer group ${borderClass} shadow-lg shadow-black/20 flex flex-col gap-3 relative dark:!bg-[#1b2537]`}
+                    className={`glass-panel p-4 rounded-xl cursor-pointer group ${borderClass} shadow-lg shadow-black/20 flex flex-col gap-3 relative dark:!bg-[#1b2537] w-full max-w-full break-all`}
                     style={{ borderTopWidth: '2px', borderTopStyle: 'solid', ...borderStyle, ...provided.draggableProps.style }}
                 >
                     <div className="flex justify-between items-start">
-                        <div className="flex items-start gap-3 pr-6">
+                        <div className="flex items-start gap-2 pr-6 flex-1">
                             <h3 className="font-semibold text-[var(--text-primary)] text-base leading-tight">{task.title}</h3>
+                            {effectiveReminder && isReminderActive(task, effectiveReminder) && (
+                                <div
+                                    className="bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-extrabold shrink-0 shadow-sm"
+                                    title={`Aviso programado: ${effectiveReminder.value} ${TIME_UNITS.find(u => u.value === effectiveReminder.unit)?.label}`}
+                                >
+                                    !
+                                </div>
+                            )}
                         </div>
                         <button
                             onClick={(e) => {
@@ -91,17 +118,24 @@ const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, car
                         </button>
                     </div>
 
+                    {/* DEBUG: Remove after fixing */}
+                    <div className="text-[8px] text-red-500 flex flex-col">
+                        <span>{task.next_notification_at ? `Due: ${new Date(task.next_notification_at).toLocaleTimeString()}` : 'No Due'}</span>
+                        <span>{effectiveReminder ? 'Has Config' : 'No Config'}</span>
+                        <span>{isReminderActive(task) ? 'Active' : 'Pending'}</span>
+                    </div>
+
                     {task.description && (
-                        <div className="text-gray-500 text-sm mt-1 line-clamp-2"><Linkify text={task.description} /></div>
+                        <div className="mt-1 text-gray-500 text-sm line-clamp-2"><Linkify text={task.description} /></div>
                     )}
 
                     {lastComment && (
                         <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-2.5">
                             <div className="flex justify-between items-center mb-1">
                                 <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Último comentario</span>
-                                <span className="text-[10px] text-indigo-300/70">{formatTimeShort(lastComment.createdAt)}</span>
+                                <span className="text-[10px] font-bold text-indigo-400 dark:text-indigo-300/70 dark:font-normal">{formatTimeShort(lastComment.createdAt)}</span>
                             </div>
-                            <p className="text-xs text-indigo-100 line-clamp-2 leading-relaxed">"{lastComment.text}"</p>
+                            <p className="text-xs text-gray-800 dark:text-indigo-100 line-clamp-2 leading-relaxed whitespace-pre-wrap">"{lastComment.text}"</p>
                         </div>
                     )}
 
@@ -117,6 +151,7 @@ const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, car
                                     <span className="ml-1">{commentCount}</span>
                                 </div>
                             )}
+
                         </div>
 
                         <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>

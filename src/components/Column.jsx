@@ -4,7 +4,7 @@ import { Icons } from './ui/Icons';
 import TaskCard from './TaskCard';
 import { COLOR_MAP } from '../utils/helpers';
 
-const Column = ({ column, tasks, allColumns, onAdd, onTaskClick, onDelete, onUpdateTask, onMoveTask, onUpdateColumn, onEditColumn }) => {
+const Column = ({ column, tasks, allColumns, onAdd, onTaskClick, onDelete, onUpdateTask, onMoveTask, onUpdateColumn, onEditColumn, provided, snapshot }) => {
     const columnTasks = tasks.filter(t => t.status === column.title);
     const isCustomColor = column.color.startsWith('#');
     const borderColor = isCustomColor ? column.color : (COLOR_MAP[column.color] || '#6366f1');
@@ -12,12 +12,27 @@ const Column = ({ column, tasks, allColumns, onAdd, onTaskClick, onDelete, onUpd
     const borderClass = '';
     const toggleCollapse = () => { onUpdateColumn(column.id, { isCollapsed: !column.isCollapsed }); };
 
+    const transitionClass = snapshot?.isDragging ? '' : 'column-size-transition';
+
     return (
         <div
-            className={`flex-shrink-0 flex flex-col h-full max-h-full transition-all duration-300 ${column.isCollapsed ? 'w-16' : ''}`}
-            style={!column.isCollapsed ? { width: 'var(--column-width)' } : {}}
+            className={`flex-shrink-0 flex flex-col h-full max-h-full ${transitionClass} ${column.isCollapsed ? 'collapsed-column' : 'fixed-width-column'}`}
+            style={{
+                ...provided.draggableProps.style,
+                boxSizing: 'border-box',
+                flex: !column.isCollapsed ? '0 0 var(--column-width, 365px)' : '0 0 4rem',
+                width: !column.isCollapsed ? 'var(--column-width, 365px)' : '4rem',
+                minWidth: !column.isCollapsed ? 'var(--column-width, 365px)' : '4rem',
+                maxWidth: !column.isCollapsed ? 'var(--column-width, 365px)' : '4rem',
+            }}
+            ref={provided.innerRef}
+            {...provided.draggableProps}
         >
-            <div className={`glass-panel p-3 rounded-t-xl ${borderClass} flex flex-col mb-1 relative dark:!bg-[#1b2537]`} style={{ borderTopWidth: '2px', borderTopStyle: 'solid', ...borderStyle }}>
+            <div
+                className={`glass-panel p-3 rounded-t-xl ${borderClass} flex flex-col mb-1 relative dark:!bg-[#1b2537] overflow-hidden`}
+                style={{ borderTopWidth: '2px', borderTopStyle: 'solid', ...borderStyle }}
+                {...provided.dragHandleProps}
+            >
                 <div className="flex justify-between items-center">
                     {!column.isCollapsed && (
                         <div className="flex items-center gap-2 overflow-hidden">
@@ -47,7 +62,7 @@ const Column = ({ column, tasks, allColumns, onAdd, onTaskClick, onDelete, onUpd
                         <div
                             {...provided.droppableProps}
                             ref={provided.innerRef}
-                            className="flex-1 overflow-y-auto p-2 flex flex-col gap-3 custom-scrollbar"
+                            className="flex-1 overflow-y-auto overflow-x-hidden p-2 flex flex-col gap-3 custom-scrollbar"
                         >
                             {columnTasks.length === 0 ? (
                                 <div className="text-center py-10 opacity-20 border-2 border-dashed border-gray-700 rounded-xl"><p className="text-sm text-gray-400">Vacío</p></div>

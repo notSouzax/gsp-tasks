@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Icons } from '../ui/Icons';
 import { Toggle } from '../ui/Toggle';
-import { AVAILABLE_COLORS, COLOR_MAP } from '../../utils/helpers';
+import { AVAILABLE_COLORS, COLOR_MAP, TIME_UNITS, calculateNextNotification } from '../../utils/helpers';
 
 const ColumnModal = ({ column, isCreating, onClose, onUpdate, onDelete }) => {
     const [title, setTitle] = useState(column?.title || "");
     const [color, setColor] = useState(column?.color || "indigo");
     const [cardConfig, setCardConfig] = useState(column?.cardConfig || {
-        enableMove: true, enableOrder: false, enableTextOnly: false,
+        enableMove: false, enableOrder: false, enableTextOnly: false,
         orderOptions: [
             { id: 'start', label: 'Inicio', action: 'move-start' },
             { id: 'end', label: 'Fin', action: 'move-end' },
@@ -17,6 +17,14 @@ const ColumnModal = ({ column, isCreating, onClose, onUpdate, onDelete }) => {
         ]
     });
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+    // Reminder settings state
+    const [defaultReminderEnabled, setDefaultReminderEnabled] = useState(column?.default_reminder_enabled ?? false);
+    const [defaultReminderValue, setDefaultReminderValue] = useState(column?.default_reminder_value ?? "");
+    const [defaultReminderUnit, setDefaultReminderUnit] = useState(column?.default_reminder_unit ?? 'minutes');
+    const [allowCardOverrides, setAllowCardOverrides] = useState(column?.allow_card_overrides ?? false);
+    const [forceRecalculate, setForceRecalculate] = useState(false);
+
     const colorInputRef = useRef(null);
 
     useEffect(() => {
@@ -31,9 +39,61 @@ const ColumnModal = ({ column, isCreating, onClose, onUpdate, onDelete }) => {
                 ]
             }));
         }
-    }, []);
+    }, [cardConfig.orderOptions]);
 
-    const handleSave = (e) => { e.preventDefault(); if (!title.trim()) return; const data = { title, color, cardConfig }; if (isCreating) { onUpdate(data); } else { onUpdate(column.id, data); } onClose(); };
+    const handleSave = (e) => {
+        e.preventDefault();
+        if (!title.trim()) return;
+
+        const data = {
+            title,
+            color,
+            cardConfig,
+            // Reminder settings
+            default_reminder_enabled: defaultReminderEnabled,
+            default_reminder_value: defaultReminderValue === "" ? null : parseInt(defaultReminderValue),
+            default_reminder_unit: defaultReminderUnit,
+            allow_card_overrides: allowCardOverrides
+        };
+
+        // If not creating, check if we need to update existing cards
+        if (!isCreating && column.cards) {
+            // Check if reminder settings have changed
+            const hasReminderSettingsChanged =
+                defaultReminderEnabled !== column.default_reminder_enabled ||
+                (defaultReminderEnabled && (
+                    parseInt(defaultReminderValue) !== column.default_reminder_value ||
+                    defaultReminderUnit !== column.default_reminder_unit
+                ));
+
+            // Only update cards if reminder settings changed or reset requested
+            if (hasReminderSettingsChanged || forceRecalculate) {
+                const updatedCards = column.cards.map(card => {
+                    // If card has manual override enabled, don't touch it
+                    if (card.reminder_enabled) return card;
+
+                    // If column default is enabled, calculate new notification time
+                    if (defaultReminderEnabled && defaultReminderValue) {
+                        return {
+                            ...card,
+                            next_notification_at: calculateNextNotification(defaultReminderValue, defaultReminderUnit)
+                        };
+                    }
+
+                    // If column default is disabled, clear notification
+                    return {
+                        ...card,
+                        next_notification_at: null
+                    };
+                });
+                data.cards = updatedCards;
+            }
+        }
+
+        if (isCreating) { onUpdate(data); } else { onUpdate(column.id, data); }
+        onClose();
+    };
+
     const addOrderOption = () => { const newOption = { id: Date.now().toString(), label: 'Nueva Opción', action: 'none' }; setCardConfig({ ...cardConfig, orderOptions: [...(cardConfig.orderOptions || []), newOption] }); };
     const updateOrderOption = (id, field, value) => { const newOptions = cardConfig.orderOptions.map(opt => opt.id === id ? { ...opt, [field]: value } : opt); setCardConfig({ ...cardConfig, orderOptions: newOptions }); };
     const removeOrderOption = (id) => { const newOptions = cardConfig.orderOptions.filter(opt => opt.id !== id); setCardConfig({ ...cardConfig, orderOptions: newOptions }); };
@@ -83,6 +143,51 @@ const ColumnModal = ({ column, isCreating, onClose, onUpdate, onDelete }) => {
                         {!cardConfig.enableTextOnly && (<><Toggle label="Función para Mover Entre Columnas" checked={cardConfig.enableMove} onChange={(val) => setCardConfig({ ...cardConfig, enableMove: val })} /><Toggle label="Función de Orden" checked={cardConfig.enableOrder} onChange={(val) => setCardConfig({ ...cardConfig, enableOrder: val })} />
                             {cardConfig.enableOrder && (<div className="mt-3 pl-2 border-l-2 border-white/10 space-y-3"><div className="flex justify-between items-center"><label className="text-xs font-medium text-gray-400">Opciones del Desplegable</label><button type="button" onClick={addOrderOption} className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1"><Icons.Plus /> Añadir</button></div><div className="space-y-2">{(cardConfig.orderOptions || []).map((opt, idx) => (<div key={opt.id || idx} className="flex gap-2 items-center bg-slate-800/50 p-2 rounded border border-white/5"><input type="text" value={opt.label} onChange={(e) => updateOrderOption(opt.id, 'label', e.target.value)} className="flex-1 bg-transparent text-xs text-white outline-none border-b border-transparent focus:border-indigo-500/50 px-1" placeholder="Nombre..." /><select value={opt.action} onChange={(e) => updateOrderOption(opt.id, 'action', e.target.value)} className="bg-slate-900 text-[10px] text-gray-300 border border-white/10 rounded px-1 py-0.5 outline-none"><option value="none">Solo Etiqueta</option><option value="move-start">Mover al Inicio</option><option value="move-end">Mover al Final</option></select><button type="button" onClick={() => removeOrderOption(opt.id)} className="text-gray-500 hover:text-red-400 p-1"><Icons.X /></button></div>))}</div></div>)}</>)}
                     </div>
+
+                    <div className="mb-6 space-y-2 border-t border-white/5 pt-4">
+                        <label className="block text-xs font-medium text-gray-400 mb-2">Avisos Automáticos</label>
+                        <Toggle
+                            label="Activar avisos por defecto para esta columna"
+                            checked={defaultReminderEnabled}
+                            onChange={setDefaultReminderEnabled}
+                        />
+
+                        {defaultReminderEnabled && (
+                            <div className="flex gap-2 mt-2 mb-3 pl-2 border-l-2 border-indigo-500/30">
+                                <input
+                                    type="number"
+                                    value={defaultReminderValue}
+                                    onChange={(e) => setDefaultReminderValue(e.target.value)}
+                                    placeholder="0"
+                                    className="w-20 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:ring-1 focus:ring-indigo-500 outline-none"
+                                />
+                                <select
+                                    value={defaultReminderUnit}
+                                    onChange={(e) => setDefaultReminderUnit(e.target.value)}
+                                    className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:ring-1 focus:ring-indigo-500 outline-none"
+                                >
+                                    {TIME_UNITS.map(unit => (
+                                        <option key={unit.value} value={unit.value}>{unit.label}</option>
+                                    ))}
+                                </select>
+                                <button
+                                    type="button"
+                                    onClick={() => setForceRecalculate(true)}
+                                    className={`p-1.5 rounded transition-colors ${forceRecalculate ? 'text-green-400 bg-green-400/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                                    title="Resetear tiempo (se aplicará al guardar)"
+                                >
+                                    <Icons.RotateCcw />
+                                </button>
+                            </div>
+                        )}
+
+                        <Toggle
+                            label="Permitir configuración individual en tarjetas"
+                            checked={allowCardOverrides}
+                            onChange={setAllowCardOverrides}
+                        />
+                    </div>
+
                     <div className="flex justify-end gap-2 pt-4 border-t border-white/5">
                         {!isCreating && (<button type="button" onClick={() => setShowDeleteConfirm(true)} className="px-4 py-2 text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors mr-auto">Eliminar</button>)}
                         <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">Cancelar</button>

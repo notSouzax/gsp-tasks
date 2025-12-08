@@ -2,14 +2,17 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import KanbanBoard from './components/KanbanBoard';
 import { Icons } from './components/ui/Icons';
-import { SettingsProvider } from './context/SettingsContext';
+import { SettingsProvider, useSettings } from './context/SettingsContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProfileModal from './components/modals/ProfileModal';
 import LoginModal from './components/modals/LoginModal';
+import BoardSettingsModal from './components/modals/BoardSettingsModal';
 
 const AppContent = () => {
   const { currentUser } = useAuth();
+  const { settings } = useSettings();
   const [showProfile, setShowProfile] = useState(false);
+  const [showBoardSettings, setShowBoardSettings] = useState(false);
   const [boards, setBoards] = useState([]);
   const [activeBoardId, setActiveBoardId] = useState(null);
 
@@ -19,6 +22,7 @@ const AppContent = () => {
       setBoards([]);
       setActiveBoardId(null);
       return;
+      // ... existing load logic
     }
 
     const storageKey = `kanban-boards-${currentUser.id}`;
@@ -34,10 +38,11 @@ const AppContent = () => {
       const defaultBoard = {
         id: Date.now().toString(),
         title: 'Mi Primer Tablero',
+        columnWidth: 365,
         columns: [
-          { id: 'todo', title: 'Por Hacer', color: 'bg-blue-500', cards: [] },
-          { id: 'doing', title: 'En Progreso', color: 'bg-yellow-500', cards: [] },
-          { id: 'done', title: 'Completado', color: 'bg-green-500', cards: [] }
+          { id: 'todo', title: 'Por Hacer', color: 'bg-blue-500', cards: [], default_reminder_enabled: false, default_reminder_value: null, default_reminder_unit: 'minutes', allow_card_overrides: false },
+          { id: 'doing', title: 'En Progreso', color: 'bg-yellow-500', cards: [], default_reminder_enabled: false, default_reminder_value: null, default_reminder_unit: 'minutes', allow_card_overrides: false },
+          { id: 'done', title: 'Completado', color: 'bg-green-500', cards: [], default_reminder_enabled: false, default_reminder_value: null, default_reminder_unit: 'minutes', allow_card_overrides: false }
         ]
       };
       setBoards([defaultBoard]);
@@ -61,18 +66,40 @@ const AppContent = () => {
 
   const activeBoard = boards.find(b => b.id === activeBoardId) || boards[0];
 
+  // Apply Board-Specific Settings (Column Width)
+  useEffect(() => {
+    if (!activeBoard) return;
+
+    // Priority: Board-specific width -> Global setting -> Default 365
+    const widthToApply = activeBoard.columnWidth || settings.columnWidth || 365;
+    document.documentElement.style.setProperty('--column-width', `${widthToApply}px`);
+
+  }, [activeBoard, settings.columnWidth]);
+
   const updateActiveBoard = (newBoardData) => {
     if (!activeBoard) return;
     setBoards(boards.map(b => b.id === activeBoard.id ? { ...b, ...newBoardData } : b));
   };
 
   const handleCreateBoard = (title) => {
-    const newBoard = { id: Date.now().toString(), title, columns: [{ id: 'todo', title: 'Por Hacer', color: 'bg-blue-500', cards: [] }, { id: 'doing', title: 'En Progreso', color: 'bg-yellow-500', cards: [] }, { id: 'done', title: 'Completado', color: 'bg-green-500', cards: [] }] };
+    const newBoard = {
+      id: Date.now().toString(),
+      title,
+      columnWidth: 365,
+      columns: [{ id: 'todo', title: 'Por Hacer', color: 'bg-blue-500', cards: [], default_reminder_enabled: false, default_reminder_value: null, default_reminder_unit: 'minutes', allow_card_overrides: false }, { id: 'doing', title: 'En Progreso', color: 'bg-yellow-500', cards: [], default_reminder_enabled: false, default_reminder_value: null, default_reminder_unit: 'minutes', allow_card_overrides: false }, { id: 'done', title: 'Completado', color: 'bg-green-500', cards: [], default_reminder_enabled: false, default_reminder_value: null, default_reminder_unit: 'minutes', allow_card_overrides: false }]
+    };
     setBoards([...boards, newBoard]);
     setActiveBoardId(newBoard.id);
   };
 
-  const handleEditBoard = (boardId, newTitle) => { setBoards(boards.map(b => b.id === boardId ? { ...b, title: newTitle } : b)); };
+  const handleUpdateBoardSettings = (boardId, updates) => {
+    setBoards(boards.map(b => b.id === boardId ? { ...b, ...updates } : b));
+  };
+
+  const handleEditBoard = (boardId, newTitle) => {
+    // Legacy support if needed, but we prefer handleUpdateBoardSettings
+    setBoards(boards.map(b => b.id === boardId ? { ...b, title: newTitle } : b));
+  };
 
   const handleDeleteBoard = (boardId) => {
     if (boards.length === 1) { alert("No puedes eliminar el último tablero."); return; }
@@ -97,8 +124,14 @@ const AppContent = () => {
         <header className="h-16 border-b border-[var(--border-color)] flex items-center justify-between px-6 bg-[var(--bg-primary)]/50 backdrop-blur-xl z-10 transition-colors duration-300">
           <div className="flex items-center gap-4">
             <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-secondary)]">{activeBoard.title}</h2>
-            <div className="h-4 w-px bg-[var(--border-color)]" />
-            <div className="flex -space-x-2">{[1, 2, 3].map(i => (<div key={i} className="w-8 h-8 rounded-full bg-slate-800 border-2 border-[var(--bg-primary)] flex items-center justify-center text-xs font-medium text-gray-400">U{i}</div>))}<button className="w-8 h-8 rounded-full bg-slate-800 border-2 border-[var(--bg-primary)] flex items-center justify-center text-xs font-medium text-gray-400 hover:bg-slate-700 transition-colors">+</button></div>
+            <button
+              onClick={() => setShowBoardSettings(true)}
+              className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 rounded-lg transition-colors"
+              title="Configuración del Tablero"
+            >
+              <Icons.Settings />
+            </button>
+
           </div>
           <div className="flex items-center gap-3">
             <button className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 rounded-lg transition-colors"><Icons.Search /></button>
@@ -120,6 +153,14 @@ const AppContent = () => {
         <KanbanBoard key={activeBoard.id} initialColumns={activeBoard.columns} onColumnsChange={(newCols) => updateActiveBoard({ columns: newCols })} />
       </div>
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
+      {showBoardSettings && (
+        <BoardSettingsModal
+          board={activeBoard}
+          onClose={() => setShowBoardSettings(false)}
+          onSave={handleUpdateBoardSettings}
+          onDelete={handleDeleteBoard}
+        />
+      )}
     </div>
   );
 };
