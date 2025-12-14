@@ -95,5 +95,5 @@ export const calculateNextNotification = (value, unit) => {
 
 export const isReminderActive = (task) => {
     if (!task || !task.next_notification_at) return false;
-    return Date.now() >= task.next_notification_at;
+    return Date.now() >= new Date(task.next_notification_at).getTime();
 };

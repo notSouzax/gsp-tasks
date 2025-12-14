@@ -5,7 +5,8 @@ import TaskCard from './TaskCard';
 import { COLOR_MAP } from '../utils/helpers';
 
 const Column = ({ column, tasks, allColumns, onAdd, onTaskClick, onDelete, onUpdateTask, onMoveTask, onUpdateColumn, onEditColumn, provided, snapshot }) => {
-    const columnTasks = tasks.filter(t => t.status === column.title);
+    // const columnTasks = tasks.filter(t => t.status === column.title); // REMOVED: Supabase uses column_id relation, tasks passed here ARE for this column.
+    const columnTasks = tasks;
     const isCustomColor = column.color.startsWith('#');
     const borderColor = isCustomColor ? column.color : (COLOR_MAP[column.color] || '#6366f1');
     const borderStyle = { borderTopColor: borderColor };
@@ -18,12 +19,8 @@ const Column = ({ column, tasks, allColumns, onAdd, onTaskClick, onDelete, onUpd
         <div
             className={`flex-shrink-0 flex flex-col h-full max-h-full ${transitionClass} ${column.isCollapsed ? 'collapsed-column' : 'fixed-width-column'}`}
             style={{
-                ...provided.draggableProps.style,
                 boxSizing: 'border-box',
-                flex: !column.isCollapsed ? '0 0 var(--column-width, 365px)' : '0 0 4rem',
-                width: !column.isCollapsed ? 'var(--column-width, 365px)' : '4rem',
-                minWidth: !column.isCollapsed ? 'var(--column-width, 365px)' : '4rem',
-                maxWidth: !column.isCollapsed ? 'var(--column-width, 365px)' : '4rem',
+                ...provided.draggableProps.style,
             }}
             ref={provided.innerRef}
             {...provided.draggableProps}
@@ -56,25 +53,27 @@ const Column = ({ column, tasks, allColumns, onAdd, onTaskClick, onDelete, onUpd
                     </div>
                 )}
             </div>
-            {!column.isCollapsed && (
-                <Droppable droppableId={column.id}>
-                    {(provided) => (
-                        <div
-                            {...provided.droppableProps}
-                            ref={provided.innerRef}
-                            className="flex-1 overflow-y-auto overflow-x-hidden p-2 flex flex-col gap-3 custom-scrollbar"
-                        >
-                            {columnTasks.length === 0 ? (
-                                <div className="text-center py-10 opacity-20 border-2 border-dashed border-gray-700 rounded-xl"><p className="text-sm text-gray-400">Vacío</p></div>
-                            ) : (
-                                columnTasks.map((task, index) => <TaskCard key={task.id} task={task} index={index} onClick={onTaskClick} onDelete={onDelete} onUpdate={onUpdateTask} onMove={onMoveTask} color={column.color} cardConfig={column.cardConfig} columns={allColumns} />)
-                            )}
-                            {provided.placeholder}
-                        </div>
-                    )}
-                </Droppable>
-            )}
-        </div>
+            {
+                !column.isCollapsed && (
+                    <Droppable droppableId={'col-' + column.id.toString()}>
+                        {(provided) => (
+                            <div
+                                {...provided.droppableProps}
+                                ref={provided.innerRef}
+                                className="flex-1 overflow-y-auto overflow-x-hidden p-2 flex flex-col gap-3 custom-scrollbar"
+                            >
+                                {columnTasks.length === 0 ? (
+                                    <div className="text-center py-10 opacity-20 border-2 border-dashed border-gray-700 rounded-xl"><p className="text-sm text-gray-400">Vacío</p></div>
+                                ) : (
+                                    columnTasks.map((task, index) => <TaskCard key={task.id} task={task} index={index} onClick={onTaskClick} onDelete={onDelete} onUpdate={onUpdateTask} onMove={onMoveTask} color={column.color} cardConfig={column.cardConfig} columns={allColumns} />)
+                                )}
+                                {provided.placeholder}
+                            </div>
+                        )}
+                    </Droppable>
+                )
+            }
+        </div >
     );
 };
 

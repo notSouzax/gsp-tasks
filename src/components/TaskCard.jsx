@@ -12,13 +12,22 @@ const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, car
     const currentColumn = columns?.find(c => c.title === task.status);
     const effectiveReminder = getEffectiveCardReminder(task, currentColumn);
 
+    // DEBUG REMINDER
+    console.log(`Card ${task.id} (${task.title}):`, {
+        next_notif: task.next_notification_at,
+        now: new Date().toISOString(),
+        active: isReminderActive(task),
+        effective: effectiveReminder,
+        column: currentColumn?.title
+    });
+
     // Force re-render when reminder is due
     const [_, setTick] = React.useState(0);
     React.useEffect(() => {
         if (!task.next_notification_at) return;
 
         const now = Date.now();
-        const timeUntilDue = task.next_notification_at - now;
+        const timeUntilDue = new Date(task.next_notification_at).getTime() - now;
 
         if (timeUntilDue > 0) {
             const timer = setTimeout(() => {
@@ -63,7 +72,7 @@ const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, car
     // Text Only Mode
     if (config.enableTextOnly) {
         return (
-            <Draggable draggableId={task.id.toString()} index={index}>
+            <Draggable draggableId={'task-' + task.id.toString()} index={index}>
                 {(provided) => (
                     <div
                         ref={provided.innerRef}
@@ -84,23 +93,23 @@ const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, car
     }
 
     return (
-        <Draggable draggableId={task.id.toString()} index={index}>
+        <Draggable draggableId={'task-' + task.id.toString()} index={index}>
             {(provided) => (
                 <div
                     ref={provided.innerRef}
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
                     onClick={() => onClick(task)}
-                    className={`glass-panel p-4 rounded-xl cursor-pointer group ${borderClass} shadow-lg shadow-black/20 flex flex-col gap-3 relative dark:!bg-[#1b2537] w-full max-w-full break-all`}
+                    className={`glass-panel p-4 rounded-xl cursor-pointer group ${borderClass} shadow-lg shadow-black/20 flex flex-col gap-3 relative dark:!bg-[#1b2537] w-full max-w-full break-words`}
                     style={{ borderTopWidth: '2px', borderTopStyle: 'solid', ...borderStyle, ...provided.draggableProps.style }}
                 >
                     <div className="flex justify-between items-start">
                         <div className="flex items-start gap-2 pr-6 flex-1">
                             <h3 className="font-semibold text-[var(--text-primary)] text-base leading-tight">{task.title}</h3>
-                            {effectiveReminder && isReminderActive(task, effectiveReminder) && (
+                            {isReminderActive(task) && (
                                 <div
                                     className="bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-extrabold shrink-0 shadow-sm"
-                                    title={`Aviso programado: ${effectiveReminder.value} ${TIME_UNITS.find(u => u.value === effectiveReminder.unit)?.label}`}
+                                    title={`Aviso programado`}
                                 >
                                     !
                                 </div>
@@ -117,6 +126,8 @@ const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, car
                             <Icons.Trash2 />
                         </button>
                     </div>
+
+
 
                     {/* DEBUG: Remove after fixing */}
                     <div className="text-[8px] text-red-500 flex flex-col">

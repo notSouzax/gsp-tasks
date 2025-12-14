@@ -11,26 +11,25 @@ const LoginModal = () => {
     const [password, setPassword] = useState('');
 
     // Register State
-    const [token, setToken] = useState('');
     const [regUsername, setRegUsername] = useState('');
     const [regPassword, setRegPassword] = useState('');
     const [regName, setRegName] = useState('');
 
     const [error, setError] = useState('');
 
-    const handleLogin = (e) => {
+    const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
-        const result = login(username, password);
+        const result = await login(username, password);
         if (!result.success) {
             setError(result.message);
         }
     };
 
-    const handleRegister = (e) => {
+    const handleRegister = async (e) => {
         e.preventDefault();
         setError('');
-        const result = register(token, regUsername, regPassword, regName);
+        const result = await register(regUsername, regPassword, regName);
         if (!result.success) {
             setError(result.message);
         }
@@ -56,13 +55,14 @@ const LoginModal = () => {
                 {!isRegistering ? (
                     <form onSubmit={handleLogin} className="space-y-4">
                         <div>
-                            <label className="block text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">Usuario</label>
+                            <label className="block text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">Email</label>
                             <input
-                                type="text"
+                                type="email"
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
                                 className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-4 py-3 text-[var(--text-primary)] outline-none focus:border-indigo-500 transition-colors"
-                                placeholder="Ej: Souza"
+                                placeholder="ejemplo@correo.com"
+                                required
                             />
                         </div>
                         <div>
@@ -81,22 +81,12 @@ const LoginModal = () => {
                         </button>
                         <div className="text-center mt-4">
                             <button type="button" onClick={() => setIsRegistering(true)} className="text-sm text-indigo-400 hover:text-indigo-300">
-                                ¿Tienes un código de invitación?
+                                ¿No tienes cuenta? Regístrate
                             </button>
                         </div>
                     </form>
                 ) : (
                     <form onSubmit={handleRegister} className="space-y-4">
-                        <div>
-                            <label className="block text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">Código de Invitación</label>
-                            <input
-                                type="text"
-                                value={token}
-                                onChange={(e) => setToken(e.target.value)}
-                                className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-4 py-3 text-[var(--text-primary)] outline-none focus:border-indigo-500 transition-colors"
-                                placeholder="Pega tu código aquí"
-                            />
-                        </div>
                         <div>
                             <label className="block text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">Nombre Completo</label>
                             <input
@@ -105,16 +95,18 @@ const LoginModal = () => {
                                 onChange={(e) => setRegName(e.target.value)}
                                 className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-4 py-3 text-[var(--text-primary)] outline-none focus:border-indigo-500 transition-colors"
                                 placeholder="Tu nombre"
+                                required
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">Usuario</label>
+                            <label className="block text-xs font-medium text-[var(--text-secondary)] uppercase tracking-wider mb-1.5">Email</label>
                             <input
-                                type="text"
+                                type="email"
                                 value={regUsername}
                                 onChange={(e) => setRegUsername(e.target.value)}
                                 className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-4 py-3 text-[var(--text-primary)] outline-none focus:border-indigo-500 transition-colors"
-                                placeholder="Elige un usuario"
+                                placeholder="tu@email.com"
+                                required
                             />
                         </div>
                         <div>
@@ -124,8 +116,9 @@ const LoginModal = () => {
                                 value={regPassword}
                                 onChange={(e) => setRegPassword(e.target.value)}
                                 required
+                                minLength={6}
                                 className="w-full bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-lg px-4 py-3 text-[var(--text-primary)] outline-none focus:border-indigo-500 transition-colors"
-                                placeholder="Elige una contraseña"
+                                placeholder="Mínimo 6 caracteres"
                             />
                         </div>
                         <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all shadow-lg shadow-indigo-500/20 mt-2">

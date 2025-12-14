@@ -1,11 +1,16 @@
 import React, { useState } from 'react';
 
 
-const CreateTaskModal = ({ columnTitle, onClose, onSave }) => {
-    const [title, setTitle] = useState("");
-    const [description, setDescription] = useState("");
-    const [initialComment, setInitialComment] = useState("");
-    const handleSubmit = (e) => { e.preventDefault(); if (!title.trim()) return; onSave({ title, description, initialComment }); onClose(); };
+const CreateTaskModal = ({ columnTitle, initialData, onClose, onSave }) => {
+    const [title, setTitle] = useState(initialData?.title || "");
+    const [description, setDescription] = useState(initialData?.description || "");
+    const [initialComment, setInitialComment] = useState(initialData?.initialComment || "");
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!title.trim()) return;
+        onSave({ title, description, initialComment });
+        onClose();
+    };
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>

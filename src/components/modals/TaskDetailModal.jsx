@@ -201,7 +201,8 @@ const TaskDetailModal = ({ task, columns, onClose, onUpdate, onDelete }) => {
                             // Calculate next_notification_at only if settings changed, reset requested, or it's missing
                             if (reminderEnabled && reminderValue) {
                                 if (hasSettingsChanged || forceRecalculate || !task.next_notification_at) {
-                                    updates.next_notification_at = calculateNextNotification(reminderValue, reminderUnit);
+                                    const nextTime = calculateNextNotification(reminderValue, reminderUnit);
+                                    updates.next_notification_at = nextTime ? new Date(nextTime).toISOString() : null;
                                 } else {
                                     // Preserve existing timer
                                     updates.next_notification_at = task.next_notification_at;

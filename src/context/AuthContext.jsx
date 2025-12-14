@@ -1,134 +1,148 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabaseClient';
 
 const AuthContext = createContext();
 
 export const useAuth = () => useContext(AuthContext);
 
 export const AuthProvider = ({ children }) => {
-    // Initial users including Super Admin
-    const [users, setUsers] = useState(() => {
-        const superAdmin = {
-            id: 'super-admin',
-            name: 'Souza',
-            email: 'souza@admin.com',
-            username: 'Souza',
-            password: 'Souzacositi1',
-            role: 'admin',
-            avatar: null
+    const [currentUser, setCurrentUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        console.log("AuthProvider: Initializing...");
+        // 1. Check active session
+        const checkSession = async () => {
+            try {
+                const { data: { session }, error } = await supabase.auth.getSession();
+                if (error) throw error;
+
+                if (session?.user) {
+                    await fetchProfile(session.user);
+                } else {
+                    setLoading(false);
+                }
+            } catch (err) {
+                console.error("Auth initialization error:", err);
+                setLoading(false); // Ensure we unblock
+            }
         };
 
-        const saved = localStorage.getItem('kanban-users');
-        let initialUsers = [];
-        if (saved) {
-            const parsed = JSON.parse(saved);
-            // Filter out any existing super-admin to ensure we use the fresh one
-            initialUsers = parsed.filter(u => u.id !== 'super-admin');
+        checkSession();
+
+        // 2. Listen for auth changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            console.log("Auth State Changed:", _event);
+            if (session?.user) {
+                await fetchProfile(session.user);
+            } else {
+                setCurrentUser(null);
+                setLoading(false);
+            }
+        });
+
+        return () => subscription.unsubscribe();
+    }, []);
+
+    const fetchProfile = async (user) => {
+        console.log("fetchProfile: Starting for user", user.id);
+        try {
+            // Timeout after 2 seconds to prevent hanging
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2000));
+            const dbPromise = supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', user.id)
+                .single();
+
+            const { data, error } = await Promise.race([dbPromise, timeoutPromise]);
+
+            console.log("fetchProfile: Supabase response", { data, error });
+
+            if (error) {
+                console.error('Error fetching profile:', error);
+                // Fallback if profile doesn't exist yet (signup lag)
+                setCurrentUser({
+                    id: user.id,
+                    email: user.email,
+                    name: user.user_metadata?.full_name || user.email.split('@')[0],
+                    role: 'user', // Default
+                    ...user.user_metadata
+                });
+            } else {
+                setCurrentUser({ ...user, ...data, name: data.full_name || user.email.split('@')[0] });
+            }
+        } catch (err) {
+            console.error("fetchProfile ERROR/TIMEOUT:", err);
+            // Fallback to user metadata
+            setCurrentUser({
+                id: user.id,
+                email: user.email,
+                name: user.user_metadata?.full_name || user.email.split('@')[0],
+                role: 'user',
+                ...user.user_metadata
+            });
+        } finally {
+            console.log("fetchProfile: Finished, setting loading=false");
+            setLoading(false);
         }
-
-        return [superAdmin, ...initialUsers];
-    });
-
-    const [currentUser, setCurrentUser] = useState(() => {
-        const saved = localStorage.getItem('kanban-current-user');
-        return saved ? JSON.parse(saved) : null; // Start with NO user logged in
-    });
-
-    const [invites, setInvites] = useState(() => {
-        const saved = localStorage.getItem('kanban-invites');
-        return saved ? JSON.parse(saved) : [];
-    });
-
-    useEffect(() => {
-        localStorage.setItem('kanban-users', JSON.stringify(users));
-    }, [users]);
-
-    useEffect(() => {
-        if (currentUser) {
-            localStorage.setItem('kanban-current-user', JSON.stringify(currentUser));
-        } else {
-            localStorage.removeItem('kanban-current-user');
-        }
-    }, [currentUser]);
-
-    useEffect(() => {
-        localStorage.setItem('kanban-invites', JSON.stringify(invites));
-    }, [invites]);
-
-    const login = (username, password) => {
-        const user = users.find(u => u.username === username && u.password === password);
-        if (user) {
-            setCurrentUser(user);
-            return { success: true };
-        }
-        return { success: false, message: 'Credenciales incorrectas' };
     };
 
-    const logout = () => {
-        setCurrentUser(null);
-    };
-
-    const updateUser = (userId, updates) => {
-        setUsers(users.map(u => u.id === userId ? { ...u, ...updates } : u));
-        if (currentUser && currentUser.id === userId) {
-            setCurrentUser(prev => ({ ...prev, ...updates }));
-        }
-    };
-
-    const inviteUser = (email) => {
-        const token = Math.random().toString(36).substring(2, 15);
-        const newInvite = { email, token, createdAt: Date.now() };
-        setInvites([...invites, newInvite]);
-        return token; // In real app, send email with link containing token
-    };
-
-    const register = (token, username, password, name) => {
-        const inviteIndex = invites.findIndex(i => i.token === token);
-        if (inviteIndex === -1) {
-            return { success: false, message: 'Invitación inválida o expirada' };
-        }
-
-        const invite = invites[inviteIndex];
-        const newUser = {
-            id: Date.now().toString(),
-            username,
-            password,
-            name,
-            email: invite.email,
-            role: 'user',
-            avatar: null
-        };
-
-        setUsers([...users, newUser]);
-
-        // Remove used invite
-        const newInvites = [...invites];
-        newInvites.splice(inviteIndex, 1);
-        setInvites(newInvites);
-
-        setCurrentUser(newUser);
+    const login = async (email, password) => {
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password
+        });
+        if (error) return { success: false, message: error.message };
         return { success: true };
     };
 
-    const deleteUser = (userId) => {
-        if (userId === 'super-admin') return; // Cannot delete super admin
-        setUsers(users.filter(u => u.id !== userId));
+    const logout = async () => {
+        await supabase.auth.signOut();
+    };
+
+    const register = async (email, password, name) => {
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                data: {
+                    full_name: name,
+                    avatar_url: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`
+                }
+            }
+        });
+        if (error) return { success: false, message: error.message };
+        return { success: true };
+    };
+
+    // Legacy support / Adapter methods
+    const updateUser = async (userId, updates) => {
+        // In a real app we would update the 'profiles' table here
+        console.log("Update user not fully implemented for DB yet", updates);
     };
 
     const isAdmin = currentUser?.role === 'admin';
 
+    // Helper for debugging
+    const inviteUser = (email) => {
+        // Supabase built-in invite logic would go here
+        console.log("Invite not implemented yet", email);
+        return "mock-token";
+    };
+
     return (
         <AuthContext.Provider value={{
             currentUser,
-            users,
+            loading,
             login,
             logout,
-            updateUser,
-            inviteUser,
             register,
-            deleteUser,
-            isAdmin
+            isAdmin,
+            updateUser, // kept for compatibility
+            inviteUser  // kept for compatibility
         }}>
-            {children}
+            {loading ? <div className="p-10 text-center text-white">Iniciando sesión...</div> : children}
         </AuthContext.Provider>
     );
 };
