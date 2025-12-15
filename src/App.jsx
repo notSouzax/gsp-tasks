@@ -15,6 +15,8 @@ import LoginModal from './components/modals/LoginModal';
 import BoardSettingsModal from './components/modals/BoardSettingsModal';
 import ConfirmationModal from './components/modals/ConfirmationModal';
 
+import Dashboard from './components/Dashboard';
+
 const AppContent = () => {
   console.log("AppContent: STARTED RENDER");
   const { currentUser } = useAuth();
@@ -26,9 +28,15 @@ const AppContent = () => {
   const [boardToDelete, setBoardToDelete] = useState(null);
   const [pendingVoiceTask, setPendingVoiceTask] = useState(null);
 
+  // View State
+  const [activeView, setActiveView] = useState('board'); // 'board' | 'dashboard'
+
   // Voice Input Logic
   const { isRecording, transcript, startRecording, stopRecording, resetTranscript, isSupported } = useVoiceInput();
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+
+  // Global Task Creator State
+  const [showGlobalTaskModal, setShowGlobalTaskModal] = useState(false);
 
   const activeBoard = boards.find(b => b.id == activeBoardId) || boards[0];
 
@@ -91,8 +99,12 @@ const AppContent = () => {
       id: Date.now(),
       title,
       description: description || "",
-      createdAt: Date.now(),
-      comments: initialComment ? [{ id: Date.now(), text: initialComment, createdAt: Date.now() }] : [],
+      createdAt: new Date().toISOString(), // FIXED: Use ISO string for UI compatibility
+      comments: initialComment ? [{
+        id: Date.now(),
+        text: initialComment,
+        createdAt: new Date().toISOString() // FIXED: Use ISO string for UI compatibility
+      }] : [],
       reminder_enabled: false,
       reminder_value: null,
       reminder_unit: 'minutes',
@@ -239,6 +251,7 @@ const AppContent = () => {
                 .sort((a, b) => a.position - b.position)
                 .map(task => ({
                   ...task,
+                  createdAt: task.created_at, // Map DB field to UI field for consistency
                   comments: (task.comments || []).sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
                 }))
             }))
@@ -378,25 +391,119 @@ const AppContent = () => {
     );
   }
 
-  console.log("AppContent: Rendering Main UI. ActiveBoard:", activeBoard.id);
+
+
+  const handleGlobalTaskSave = async (taskData) => {
+    // Re-use logic from finalizeVoiceTask - they are essentially the same:
+    // constructing a task and inserting it into a potentially different board/column.
+    const { targetBoardId, targetColumnId, title, description, initialComment } = taskData;
+
+    const targetBoard = boards.find(b => b.id == targetBoardId);
+    const targetColumn = targetBoard?.columns.find(c => c.id == targetColumnId);
+
+    if (!targetBoard || !targetColumn) {
+      console.error("Target board or column not found");
+      return;
+    }
+
+    // We can refactor finalizeVoiceTask to be more generic, or just call the core logic here.
+    // Let's copy the core logic to avoid complex refactoring of the voice flow state.
+
+    const newTask = {
+      id: Date.now(),
+      title,
+      description: description || "",
+      createdAt: new Date().toISOString(),
+      comments: initialComment ? [{ id: Date.now(), text: initialComment, createdAt: new Date().toISOString() }] : [],
+      reminder_enabled: false,
+      reminder_value: null,
+      reminder_unit: 'minutes',
+      next_notification_at: null
+    };
+
+    // Apply defaults
+    if (targetColumn.default_reminder_enabled) {
+      newTask.next_notification_at = calculateNextNotification(targetColumn.default_reminder_value, targetColumn.default_reminder_unit);
+    }
+
+    // Update State
+    setBoards(prevBoards => prevBoards.map(b => {
+      if (b.id === targetBoard.id) {
+        const newColumns = b.columns.map(col => {
+          if (col.id === targetColumn.id) {
+            return { ...col, cards: [...(col.cards || []), newTask] };
+          }
+          return col;
+        });
+        return { ...b, columns: newColumns };
+      }
+      return b;
+    }));
+
+    // Persist Task
+    const { data: insertedTask, error } = await supabase.from('tasks').insert([{
+      column_id: targetColumn.id,
+      title: newTask.title,
+      description: newTask.description,
+      position: (targetColumn.cards || []).length,
+      next_notification_at: newTask.next_notification_at ? new Date(newTask.next_notification_at).toISOString() : null
+    }]).select().single();
+
+    if (!error && initialComment) {
+      await supabase.from('comments').insert([{
+        task_id: insertedTask.id,
+        user_id: currentUser.id,
+        text: initialComment
+      }]);
+    }
+
+    // Switch board if different
+    if (targetBoard.id !== activeBoardId) {
+      setActiveBoardId(targetBoard.id);
+    }
+  };
+
+  console.log("AppContent: Rendering Main UI. ActiveBoard:", activeBoard?.id);
   return (
     <div className="flex h-screen bg-[var(--bg-primary)] text-[var(--text-primary)] overflow-hidden font-sans selection:bg-indigo-500/30 transition-colors duration-300">
-      <Sidebar boards={boards} activeBoardId={activeBoardId} onSwitchBoard={setActiveBoardId} onCreateBoard={handleCreateBoard} onEditBoard={handleEditBoard} onDeleteBoard={handleDeleteBoard} />
+      <Sidebar
+        boards={boards}
+        activeBoardId={activeBoardId}
+        onSwitchBoard={setActiveBoardId}
+        onCreateBoard={handleCreateBoard}
+        onEditBoard={handleEditBoard}
+        onDeleteBoard={handleDeleteBoard}
+        activeView={activeView}
+        onSwitchView={setActiveView}
+      />
       <div className="flex-1 flex flex-col min-w-0 bg-[var(--bg-primary)] relative transition-colors duration-300">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-500/10 via-[var(--bg-primary)]/0 to-[var(--bg-primary)]/0 pointer-events-none" />
         <header className="h-16 border-b border-[var(--border-color)] flex items-center justify-between px-6 bg-[var(--bg-primary)]/50 backdrop-blur-xl z-10 transition-colors duration-300">
           <div className="flex items-center gap-4">
-            <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-secondary)]">{activeBoard.title}</h2>
-            <button
-              onClick={() => setShowBoardSettings(true)}
-              className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 rounded-lg transition-colors"
-              title="Configuración del Tablero"
-            >
-              <Icons.Settings />
-            </button>
-
+            <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-secondary)]">
+              {activeView === 'dashboard' ? 'Dashboard' : activeBoard?.title}
+            </h2>
+            {activeView === 'board' && (
+              <button
+                onClick={() => setShowBoardSettings(true)}
+                className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 rounded-lg transition-colors"
+                title="Configuración del Tablero"
+              >
+                <Icons.Settings />
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-3">
+            {/* GLOBAL NEW TASK BUTTON */}
+            <button
+              onClick={() => setShowGlobalTaskModal(true)}
+              className="p-2 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 hover:text-indigo-300 rounded-lg transition-all flex items-center gap-2"
+              title="Nueva Tarea Global"
+            >
+              <span className="text-lg font-bold leading-none">+</span>
+              <span className="text-xs font-medium hidden sm:block">Nueva Tarea</span>
+            </button>
+
             {isSupported && (
               <button
                 onClick={isRecording ? stopRecording : startRecording}
@@ -426,10 +533,17 @@ const AppContent = () => {
             </div>
           </div>
         </header>
-        <KanbanBoard key={activeBoard.id} boardId={activeBoard.id} initialColumns={activeBoard.columns} onColumnsChange={(newCols) => updateActiveBoard({ columns: newCols })} />
+
+        {activeView === 'dashboard' ? (
+          <Dashboard boards={boards} />
+        ) : (
+          <>
+            {activeBoard && <KanbanBoard key={activeBoard.id} boardId={activeBoard.id} initialColumns={activeBoard.columns} onColumnsChange={(newCols) => updateActiveBoard({ columns: newCols })} />}
+          </>
+        )}
       </div>
       {showProfile && <ProfileModal onClose={() => setShowProfile(false)} />}
-      {showBoardSettings && (
+      {showBoardSettings && activeBoard && (
         <BoardSettingsModal
           board={activeBoard}
           onClose={() => setShowBoardSettings(false)}
@@ -451,6 +565,15 @@ const AppContent = () => {
           initialData={pendingVoiceTask.taskData}
           onClose={() => setPendingVoiceTask(null)}
           onSave={finalizeVoiceTask}
+        />
+      )}
+      {/* GLOBAL TASK MODAL */}
+      {showGlobalTaskModal && (
+        <CreateTaskModal
+          isGlobal={true}
+          boards={boards}
+          onClose={() => setShowGlobalTaskModal(false)}
+          onSave={handleGlobalTaskSave}
         />
       )}
     </div>

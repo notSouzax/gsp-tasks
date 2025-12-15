@@ -38,6 +38,9 @@ const WordCorrector = {
 
     // Seed with common verbs and NOUNS to prevent over-correction (e.g. Facturas vs Facturar)
     initialVocab: [
+        // Keywords
+        'tarea', 'tareas',
+
         // Verbos de acción comunes
         'pedir', 'cambiar', 'hacer', 'enviar', 'solicitar', 'adjuntar', 'revisar', 'facturar', 'pagar', 'llamar',
         'cobre', 'cobrar', 'devolver', 'emitir', 'contabilizar', 'presentar', 'liquidar', 'poder',
@@ -78,10 +81,11 @@ const WordCorrector = {
             if (changed) this.saveVocab(vocab);
 
             return vocab;
-        } catch (e) {
+        } catch {
             return {};
         }
     },
+
 
     saveVocab(vocab) {
         localStorage.setItem(this.key, JSON.stringify(vocab));
@@ -243,10 +247,20 @@ const formatText = (text) => {
     }
 
     // 7. Ensure it ends with punctuation if it's a sentence (and long enough)
+    // NOTE: User requested NO periods for titles. We will handle that by passing a flag or stripping it later.
+    // For now, let's keep this generic but ensure the parser handles the Title specifically.
     if (formatted.length > 10 && !/[.,;?!:]$/.test(formatted)) {
         formatted += ".";
     }
 
+    return formatted;
+};
+
+// Helper for Titles specifically (No Trailing Period)
+const formatTitle = (text) => {
+    let formatted = formatText(text);
+    // Remove trailing period if present
+    formatted = formatted.replace(/\.$/, '');
     return formatted;
 };
 
@@ -261,6 +275,39 @@ export const learnEntity = (name) => {
 // Also export a specific learn function for general text (comments)
 export const learnVocabulary = (text) => {
     WordCorrector.learn(text);
+};
+
+// NEW: Learn from positive confirmation
+export const learnConfirmation = (title, comment) => {
+    // Boost vocabulary for valid words found in the confirmed text
+    WordCorrector.learn(title);
+    WordCorrector.learn(comment);
+
+    // Potentially learn the Title as an entity if it looks like one (Capitalized words)
+    // For now, simpler is better: rely on general vocabulary boosting.
+    // If we wanted to learn "Maderas Moreno" as an entity automatically:
+    if (title && title.split(' ').length <= 4) {
+        EntityMemory.add(title);
+    }
+};
+
+// NEW: Learn from user correction
+export const learnCorrection = (originalTitle, correctedTitle, originalComment, correctedComment) => {
+    // 1. Learn from Title Correction
+    if (originalTitle !== correctedTitle && correctedTitle) {
+        // User changed the title. Learn the NEW title.
+        WordCorrector.learn(correctedTitle);
+        // If the new title is short, treat it as a new Entity
+        if (correctedTitle.split(' ').length <= 4) {
+            EntityMemory.add(correctedTitle);
+        }
+    }
+
+    // 2. Learn from Comment Correction
+    if (originalComment !== correctedComment && correctedComment) {
+        // User changed the comment. Learn the NEW words.
+        WordCorrector.learn(correctedComment);
+    }
 };
 
 export const injectContext = (boards) => {
@@ -284,18 +331,15 @@ export const injectContext = (boards) => {
 export const parseTaskIntent = (text, boards, activeBoardId) => {
     if (!text || !boards) return null;
 
-    // --- STEP 0: AUTO-CORRECTION ---
-    // Correct typos before any parsing
-    let rawText = WordCorrector.correct(text);
-    rawText = rawText.trim();
+    // --- STEP 0: NO AUTO-CORRECTION YET ---
+    // We use the simpler, raw text for parsing to avoid mangling names/keywords.
+    let rawText = text.trim();
 
     let detectedBoard = null;
     let detectedColumn = null;
 
-    // --- STEP 1: SMART ROUTING ---
-
+    // --- STEP 1: SMART ROUTING (Preserved) ---
     // 1.a Detect Board
-    // Sort boards by length to match specific names first
     const sortedBoards = [...boards].sort((a, b) => b.title.length - a.title.length);
 
     for (const board of sortedBoards) {
@@ -330,87 +374,64 @@ export const parseTaskIntent = (text, boards, activeBoardId) => {
 
     const targetColumnId = detectedColumn ? detectedColumn.id : targetBoard.columns[0]?.id;
 
-    // --- STEP 2: ENTITY & INTENT PARSING ---
-
-    const prefixes = [
-        "crear una tarea", "crear tarea", "nueva tarea", "añadir tarea", "agregar tarea",
-        "pon una tarea", "anota", "recuérdame", "crear", "tarea"
-    ];
-
-    let lowerRaw = rawText.toLowerCase();
-    for (const prefix of prefixes) {
-        if (lowerRaw.startsWith(prefix)) {
-            rawText = rawText.slice(prefix.length).trim();
-            break;
-        }
-    }
-
+    // --- STEP 2: STRICT KEYWORD PARSING (CLIENTE / TAREA) ---
     let title = "";
     let comment = "";
 
-    // A. Check Memory Logic
-    const knownEntity = EntityMemory.matchStart(rawText);
+    const lowerRaw = rawText.toLowerCase();
 
-    if (knownEntity) {
-        title = knownEntity;
-        comment = rawText.slice(knownEntity.length).trim();
-        comment = comment.replace(/^([.,;?!]|\s)+/g, '');
+    // Normalization regexes to catch "Cliente:", "Cliente", "Tarea:", "Tarea"
+    const clientIdx = lowerRaw.search(/\bcliente\b/);
+    const taskIdx = lowerRaw.search(/\btarea\b/);
 
-    } else {
-        // B. Heuristic Split Logic
-        const periodIndex = rawText.indexOf('.');
+    if (clientIdx !== -1 || taskIdx !== -1) {
+        // STRICT MODE ENGAGED
 
-        if (periodIndex !== -1) {
-            title = rawText.substring(0, periodIndex).trim();
-            comment = rawText.substring(periodIndex + 1).trim();
-        } else {
-            const keyWords = [" quiere ", " necesita ", " dice ", " pide ", " solicita ", " tiene "];
-            let splitIndex = -1;
-
-            for (const kw of keyWords) {
-                const idx = rawText.toLowerCase().indexOf(kw);
-                if (idx !== -1) {
-                    splitIndex = idx;
-                    break;
-                }
-            }
-
-            if (splitIndex !== -1) {
-                title = rawText.substring(0, splitIndex).trim();
-                comment = rawText.substring(splitIndex).trim();
+        // Case A: Both keywords present
+        if (clientIdx !== -1 && taskIdx !== -1) {
+            if (clientIdx < taskIdx) {
+                // "Cliente [Name] Tarea [Comment]"
+                title = rawText.substring(clientIdx + 7, taskIdx).trim(); // +7 for "cliente" length
+                comment = rawText.substring(taskIdx + 5).trim(); // +5 for "tarea" length
             } else {
-                title = rawText;
-                comment = "";
+                // "Tarea [Comment] Cliente [Name]" (Unusual but possible)
+                comment = rawText.substring(taskIdx + 5, clientIdx).trim();
+                title = rawText.substring(clientIdx + 7).trim();
             }
         }
+        // Case B: Only "Cliente" present
+        else if (clientIdx !== -1) {
+            title = rawText.substring(clientIdx + 7).trim();
+        }
+        // Case C: Only "Tarea" present
+        else if (taskIdx !== -1) {
+            title = "Nueva Tarea"; // Default prompt
+            comment = rawText.substring(taskIdx + 5).trim();
+        }
+    } else {
+        // FALLBACK MODE: No keywords found.
+        // Treat everything as Title to be safe (prevent data loss).
+        // Removing old heuristic splitting because it was causing the "surname in comments" issue.
+        title = rawText;
     }
+
+    // Clean up potential colon separators users might say or STT might insert (e.g. "Cliente: Juan")
+    title = title.replace(/^[:.,;\s]+|[:.,;\s]+$/g, '').trim();
+    comment = comment.replace(/^[:.,;\s]+/, '').trim();
 
     // --- STEP 3: FORMATTING ---
     if (title.length === 0) title = "Nueva Tarea";
 
-    title = formatText(title);
+    // Auto-Correct comment only
+    comment = WordCorrector.correct(comment);
+
+    // Apply strict formatting: Title NO periods, Comment YES periods
+    title = formatTitle(title);
     comment = formatText(comment);
 
-    if (title.endsWith('.')) title = title.slice(0, -1);
-
-    // LEARNING MOMENT: Learn the vocabulary from this new command
-    // We learn from the CORRECTED text, reinforcing it.
+    // LEARNING MOMENT
     WordCorrector.learn(title);
     WordCorrector.learn(comment);
-
-    // --- STEP 4: VALIDATION ---
-    // Heuristic: If we have a long sentence (> 4 words) but NO comment (meaning we couldn't split Title/Comment)
-    // and NO known Entity was found... it might be ambiguous.
-    // Exception: If everything is Title because it's short ("Comprar Pan"), that's fine.
-
-    const wordCount = rawText.split(' ').length;
-    if (wordCount > 4 && comment.length === 0 && !knownEntity) {
-        return {
-            error: "unclear",
-            needsRepetition: true,
-            originalText: rawText
-        };
-    }
 
     return {
         title,

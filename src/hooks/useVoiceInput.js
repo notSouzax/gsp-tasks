@@ -33,7 +33,7 @@ export const useVoiceInput = () => {
                 if (silenceTimer.current) clearTimeout(silenceTimer.current);
                 silenceTimer.current = setTimeout(() => {
                     recognitionInstance.stop();
-                }, 2000); // Reduced to 2s
+                }, 1500); // Reduced to 1.5s
 
                 let fullTranscript = '';
                 for (let i = 0; i < event.results.length; ++i) {
@@ -92,6 +92,6 @@ export const useVoiceInput = () => {
         startRecording,
         stopRecording,
         resetTranscript,
-        isSupported: !!recognitionRef.current || ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)
+        isSupported: 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window
     };
 };
