@@ -48,7 +48,8 @@ create table public.tasks (
   reminder_value integer,
   reminder_unit text,
   next_notification_at timestamp with time zone,
-  sort_option_id text -- For the custom sort status
+  sort_option_id text, -- For the custom sort status
+  checklist jsonb default '[]'::jsonb -- For subtasks
 );
 
 -- Comments table

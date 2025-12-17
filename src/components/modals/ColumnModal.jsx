@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { Icons } from '../ui/Icons';
 import { Toggle } from '../ui/Toggle';
 import { AVAILABLE_COLORS, COLOR_MAP, TIME_UNITS, calculateNextNotification } from '../../utils/helpers';
@@ -6,15 +6,18 @@ import { AVAILABLE_COLORS, COLOR_MAP, TIME_UNITS, calculateNextNotification } fr
 const ColumnModal = ({ column, isCreating, onClose, onUpdate, onDelete }) => {
     const [title, setTitle] = useState(column?.title || "");
     const [color, setColor] = useState(column?.color || "indigo");
-    const [cardConfig, setCardConfig] = useState(column?.cardConfig || {
-        enableMove: false, enableOrder: false, enableTextOnly: false,
-        orderOptions: [
-            { id: 'start', label: 'Inicio', action: 'move-start' },
-            { id: 'end', label: 'Fin', action: 'move-end' },
-            { id: 'review', label: 'En Revisión', action: 'none' },
-            { id: 'paused', label: 'Pausado', action: 'none' },
-            { id: 'urgent', label: 'Urgente', action: 'none' }
-        ]
+    const [cardConfig, setCardConfig] = useState(() => {
+        const initialConfig = column?.cardConfig ? { ...column.cardConfig } : { enableMove: false, enableOrder: false, enableTextOnly: false };
+        if (!initialConfig.orderOptions) {
+            initialConfig.orderOptions = [
+                { id: 'start', label: 'Inicio', action: 'move-start' },
+                { id: 'end', label: 'Fin', action: 'move-end' },
+                { id: 'review', label: 'En Revisión', action: 'none' },
+                { id: 'paused', label: 'Pausado', action: 'none' },
+                { id: 'urgent', label: 'Urgente', action: 'none' }
+            ];
+        }
+        return initialConfig;
     });
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
@@ -27,19 +30,7 @@ const ColumnModal = ({ column, isCreating, onClose, onUpdate, onDelete }) => {
 
     const colorInputRef = useRef(null);
 
-    useEffect(() => {
-        if (!cardConfig.orderOptions) {
-            setCardConfig(prev => ({
-                ...prev, orderOptions: [
-                    { id: 'start', label: 'Inicio', action: 'move-start' },
-                    { id: 'end', label: 'Fin', action: 'move-end' },
-                    { id: 'review', label: 'En Revisión', action: 'none' },
-                    { id: 'paused', label: 'Pausado', action: 'none' },
-                    { id: 'urgent', label: 'Urgente', action: 'none' }
-                ]
-            }));
-        }
-    }, [cardConfig.orderOptions]);
+    // useEffect for default options removed (moved to initial state)
 
     const handleSave = (e) => {
         e.preventDefault();
@@ -99,102 +90,218 @@ const ColumnModal = ({ column, isCreating, onClose, onUpdate, onDelete }) => {
     const removeOrderOption = (id) => { const newOptions = cardConfig.orderOptions.filter(opt => opt.id !== id); setCardConfig({ ...cardConfig, orderOptions: newOptions }); };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
-            <div className="bg-slate-900 border border-white/10 rounded-2xl w-full max-w-sm shadow-2xl p-6 max-h-[90vh] overflow-y-auto custom-scrollbar" onClick={e => e.stopPropagation()}>
-                <h2 className="text-xl font-bold text-white mb-4">{isCreating ? "Nueva Columna" : "Editar Columna"}</h2>
-                <form onSubmit={handleSave}>
-                    <div className="mb-4"><label className="block text-xs font-medium text-gray-400 mb-1">Nombre</label><input autoFocus type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all" /></div>
-                    <div className="mb-6">
-                        <label className="block text-xs font-medium text-gray-400 mb-2">Color</label>
-                        <div className="flex gap-3 items-start">
-                            <div className="grid grid-cols-10 gap-2">
-                                {AVAILABLE_COLORS.map(c => (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-50 p-4 transition-all duration-300" onClick={onClose}>
+            <div
+                className="bg-[#0f172a] border border-slate-700/50 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden transform transition-all scale-100 flex flex-col max-h-[90vh]"
+                onClick={e => e.stopPropagation()}
+            >
+                {/* Header */}
+                <div className="bg-slate-900/50 p-6 pb-4 border-b border-white/5 flex-shrink-0">
+                    <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">
+                        {isCreating ? "Nueva Columna" : "Editar Columna"}
+                    </h2>
+                </div>
+
+                <div className="overflow-y-auto custom-scrollbar p-6 pt-4 flex-1">
+                    <form onSubmit={handleSave}>
+                        <div className="mb-6">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Nombre</label>
+                            <input
+                                autoFocus
+                                type="text"
+                                value={title}
+                                onChange={(e) => setTitle(e.target.value)}
+                                className="w-full bg-[#1e293b] border border-slate-700/50 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none transition-all placeholder-slate-600"
+                            />
+                        </div>
+
+                        <div className="mb-6">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-3">Color de Columna</label>
+                            <div className="flex gap-3 items-start">
+                                <div className="grid grid-cols-10 gap-2">
+                                    {AVAILABLE_COLORS.map(c => (
+                                        <button
+                                            key={c}
+                                            type="button"
+                                            onClick={() => setColor(c)}
+                                            style={{ backgroundColor: COLOR_MAP[c] }}
+                                            className={`w-5 h-5 rounded-full ring-2 ring-offset-2 ring-offset-[#0f172a] ${color === c ? 'ring-white scale-110' : 'ring-transparent opacity-70 hover:opacity-100'} transition-all`}
+                                        />
+                                    ))}
+                                </div>
+                                <div className="relative pt-0.5 ml-2 pl-2 border-l border-white/10">
                                     <button
-                                        key={c}
                                         type="button"
-                                        onClick={() => setColor(c)}
-                                        style={{ backgroundColor: COLOR_MAP[c] }}
-                                        className={`w-6 h-6 rounded-full ring-2 ring-offset-2 ring-offset-slate-900 ${color === c ? 'ring-white' : 'ring-transparent'} hover:scale-110 transition-transform`}
+                                        onClick={() => colorInputRef.current?.click()}
+                                        className="w-5 h-5 rounded-full bg-slate-700 ring-1 ring-white/20 flex items-center justify-center hover:bg-slate-600 transition-colors"
+                                        title="Color personalizado"
+                                    >
+                                        <Icons.Plus size={12} />
+                                    </button>
+                                    <input
+                                        ref={colorInputRef}
+                                        type="color"
+                                        value={color}
+                                        onChange={(e) => setColor(e.target.value)}
+                                        className="absolute opacity-0 w-0 h-0"
                                     />
-                                ))}
+                                </div>
                             </div>
-                            <div className="relative pt-0.5">
-                                <button
-                                    type="button"
-                                    onClick={() => colorInputRef.current?.click()}
-                                    className="w-6 h-6 rounded-full bg-slate-700 ring-2 ring-offset-2 ring-offset-slate-900 flex items-center justify-center hover:scale-110 transition-transform"
-                                    title="Color personalizado"
-                                >
-                                    <Icons.Plus />
-                                </button>
-                                <input
-                                    ref={colorInputRef}
-                                    type="color"
-                                    value={color}
-                                    onChange={(e) => setColor(e.target.value)}
-                                    className="absolute opacity-0 w-0 h-0"
+                        </div>
+
+                        <div className="mb-6 space-y-4">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Configuración de Tarjetas</label>
+                            <div className="bg-[#1e293b]/30 p-4 rounded-xl border border-slate-800 space-y-3">
+                                <Toggle label="Solo Texto (Vista Limpia)" checked={cardConfig.enableTextOnly} onChange={(val) => setCardConfig({ ...cardConfig, enableTextOnly: val })} />
+                                {!cardConfig.enableTextOnly && (
+                                    <>
+                                        <Toggle label="Ordenar Manualmente" checked={cardConfig.enableOrder} onChange={(val) => setCardConfig({ ...cardConfig, enableOrder: val })} />
+
+                                        {cardConfig.enableOrder && (
+                                            <div className="mt-3 pt-3 border-t border-slate-700/50 space-y-3 animate-in fade-in slide-in-from-top-1">
+                                                <div className="flex justify-between items-center">
+                                                    <label className="text-[10px] font-medium text-slate-400">Opciones Personalizadas</label>
+                                                    <button type="button" onClick={addOrderOption} className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 bg-indigo-500/10 px-1.5 py-0.5 rounded"><Icons.Plus size={10} /> Añadir</button>
+                                                </div>
+                                                <div className="space-y-2 max-h-32 overflow-y-auto custom-scrollbar pr-1">
+                                                    {(cardConfig.orderOptions || []).map((opt, idx) => (
+                                                        <div key={opt.id || idx} className="flex gap-2 items-center bg-slate-900/50 p-1.5 rounded border border-slate-700/50 group">
+                                                            <input type="text" value={opt.label} onChange={(e) => updateOrderOption(opt.id, 'label', e.target.value)} className="flex-1 bg-transparent text-xs text-slate-200 outline-none border-b border-transparent focus:border-indigo-500/50 px-1 placeholder-slate-600" placeholder="Nombre..." />
+                                                            <div className="relative flex items-center">
+                                                                <select value={opt.action} onChange={(e) => updateOrderOption(opt.id, 'action', e.target.value)} className="appearance-none bg-slate-800 text-[10px] text-slate-400 border border-slate-700 rounded px-2 pl-2 pr-6 py-0.5 outline-none max-w-[120px] transition-colors hover:bg-slate-700 hover:text-slate-300">
+                                                                    <option value="none">Etiqueta</option>
+                                                                    <option value="move-start">Inicio</option>
+                                                                    <option value="move-end">Fin</option>
+                                                                </select>
+                                                                <Icons.ChevronDown size={10} className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                                            </div>
+                                                            <button type="button" onClick={() => removeOrderOption(opt.id)} className="text-slate-600 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity"><Icons.X size={12} /></button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="pt-2 border-t border-white/5 mt-2">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Orden de Creación</label>
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-700/50 bg-[#1e293b]/50 hover:bg-[#1e293b] cursor-pointer transition-colors group">
+                                        <div className="relative flex items-center justify-center">
+                                            <input
+                                                type="radio"
+                                                name="insertion_policy"
+                                                value="bottom"
+                                                checked={(cardConfig.insertion_policy || 'bottom') === 'bottom'}
+                                                onChange={() => setCardConfig({ ...cardConfig, insertion_policy: 'bottom' })}
+                                                className="peer appearance-none w-5 h-5 rounded-full border-2 border-slate-600 checked:border-indigo-500 checked:bg-indigo-500/10 transition-all"
+                                            />
+                                            <div className="absolute w-2.5 h-2.5 rounded-full bg-indigo-500 scale-0 peer-checked:scale-100 transition-transform pointer-events-none"></div>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-medium text-slate-200 group-hover:text-white">Al final (Por defecto)</span>
+                                            <span className="text-xs text-slate-500">Las nuevas tareas aparecerán abajo (Cola)</span>
+                                        </div>
+                                    </label>
+
+                                    <label className="flex items-center gap-3 p-3 rounded-xl border border-slate-700/50 bg-[#1e293b]/50 hover:bg-[#1e293b] cursor-pointer transition-colors group">
+                                        <div className="relative flex items-center justify-center">
+                                            <input
+                                                type="radio"
+                                                name="insertion_policy"
+                                                value="top"
+                                                checked={cardConfig.insertion_policy === 'top'}
+                                                onChange={() => setCardConfig({ ...cardConfig, insertion_policy: 'top' })}
+                                                className="peer appearance-none w-5 h-5 rounded-full border-2 border-slate-600 checked:border-indigo-500 checked:bg-indigo-500/10 transition-all"
+                                            />
+                                            <div className="absolute w-2.5 h-2.5 rounded-full bg-indigo-500 scale-0 peer-checked:scale-100 transition-transform pointer-events-none"></div>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-sm font-medium text-slate-200 group-hover:text-white">Al principio</span>
+                                            <span className="text-xs text-slate-500">Las nuevas tareas aparecerán arriba (Pila)</span>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="mb-6 space-y-4 border-t border-white/5 pt-4">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Avisos Automáticos</label>
+                            <div className="bg-[#1e293b]/30 p-4 rounded-xl border border-slate-800 space-y-3">
+                                <Toggle
+                                    label="Activar avisos por defecto"
+                                    checked={defaultReminderEnabled}
+                                    onChange={setDefaultReminderEnabled}
+                                />
+
+                                {defaultReminderEnabled && (
+                                    <div className="flex gap-2 mt-2 mb-3 pl-2 border-l-2 border-indigo-500/30 animate-in fade-in slide-in-from-left-2">
+                                        <input
+                                            type="number"
+                                            value={defaultReminderValue}
+                                            onChange={(e) => setDefaultReminderValue(e.target.value)}
+                                            placeholder="0"
+                                            className="w-16 bg-[#0f172a] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white focus:ring-1 focus:ring-indigo-500 outline-none text-center"
+                                        />
+                                        <div className="relative flex items-center flex-1">
+                                            <select
+                                                value={defaultReminderUnit}
+                                                onChange={(e) => setDefaultReminderUnit(e.target.value)}
+                                                className="appearance-none w-full bg-[#0f172a] border border-slate-700 rounded-lg pl-3 pr-8 py-1.5 text-xs text-white focus:ring-1 focus:ring-indigo-500 outline-none transition-colors"
+                                            >
+                                                {TIME_UNITS.map(unit => (
+                                                    <option key={unit.value} value={unit.value}>{unit.label}</option>
+                                                ))}
+                                            </select>
+                                            <Icons.ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setForceRecalculate(true)}
+                                            className={`p-1.5 rounded-lg transition-colors border ${forceRecalculate ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-transparent text-slate-500 border-transparent hover:bg-white/5 hover:text-slate-300'}`}
+                                            title="Resetear tiempo"
+                                        >
+                                            <Icons.RotateCcw size={14} />
+                                        </button>
+                                    </div>
+                                )}
+
+                                <Toggle
+                                    label="Permitir override en tarjeta"
+                                    checked={allowCardOverrides}
+                                    onChange={setAllowCardOverrides}
                                 />
                             </div>
                         </div>
-                    </div>
-                    <div className="mb-6 space-y-2">
-                        <label className="block text-xs font-medium text-gray-400 mb-2">Configuración de Tarjetas</label>
-                        <Toggle label="Solo Texto (Vista Limpia)" checked={cardConfig.enableTextOnly} onChange={(val) => setCardConfig({ ...cardConfig, enableTextOnly: val })} />
-                        {!cardConfig.enableTextOnly && (<><Toggle label="Función para Mover Entre Columnas" checked={cardConfig.enableMove} onChange={(val) => setCardConfig({ ...cardConfig, enableMove: val })} /><Toggle label="Función de Orden" checked={cardConfig.enableOrder} onChange={(val) => setCardConfig({ ...cardConfig, enableOrder: val })} />
-                            {cardConfig.enableOrder && (<div className="mt-3 pl-2 border-l-2 border-white/10 space-y-3"><div className="flex justify-between items-center"><label className="text-xs font-medium text-gray-400">Opciones del Desplegable</label><button type="button" onClick={addOrderOption} className="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1"><Icons.Plus /> Añadir</button></div><div className="space-y-2">{(cardConfig.orderOptions || []).map((opt, idx) => (<div key={opt.id || idx} className="flex gap-2 items-center bg-slate-800/50 p-2 rounded border border-white/5"><input type="text" value={opt.label} onChange={(e) => updateOrderOption(opt.id, 'label', e.target.value)} className="flex-1 bg-transparent text-xs text-white outline-none border-b border-transparent focus:border-indigo-500/50 px-1" placeholder="Nombre..." /><select value={opt.action} onChange={(e) => updateOrderOption(opt.id, 'action', e.target.value)} className="bg-slate-900 text-[10px] text-gray-300 border border-white/10 rounded px-1 py-0.5 outline-none"><option value="none">Solo Etiqueta</option><option value="move-start">Mover al Inicio</option><option value="move-end">Mover al Final</option></select><button type="button" onClick={() => removeOrderOption(opt.id)} className="text-gray-500 hover:text-red-400 p-1"><Icons.X /></button></div>))}</div></div>)}</>)}
-                    </div>
 
-                    <div className="mb-6 space-y-2 border-t border-white/5 pt-4">
-                        <label className="block text-xs font-medium text-gray-400 mb-2">Avisos Automáticos</label>
-                        <Toggle
-                            label="Activar avisos por defecto para esta columna"
-                            checked={defaultReminderEnabled}
-                            onChange={setDefaultReminderEnabled}
-                        />
+                        <div className="flex justify-end gap-3 pt-4 border-t border-white/5 flex-shrink-0">
+                            {!isCreating && (<button type="button" onClick={() => setShowDeleteConfirm(true)} className="px-3 py-2 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors mr-auto flex items-center gap-1"><Icons.Trash2 size={14} /> Eliminar</button>)}
+                            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all">Cancelar</button>
+                            <button type="submit" disabled={!title.trim()} className="px-5 py-2 text-sm font-bold bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-xl shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:transform-none">{isCreating ? "Crear Columna" : "Guardar"}</button>
+                        </div>
+                    </form>
+                </div>
 
-                        {defaultReminderEnabled && (
-                            <div className="flex gap-2 mt-2 mb-3 pl-2 border-l-2 border-indigo-500/30">
-                                <input
-                                    type="number"
-                                    value={defaultReminderValue}
-                                    onChange={(e) => setDefaultReminderValue(e.target.value)}
-                                    placeholder="0"
-                                    className="w-20 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:ring-1 focus:ring-indigo-500 outline-none"
-                                />
-                                <select
-                                    value={defaultReminderUnit}
-                                    onChange={(e) => setDefaultReminderUnit(e.target.value)}
-                                    className="flex-1 bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm text-white focus:ring-1 focus:ring-indigo-500 outline-none"
-                                >
-                                    {TIME_UNITS.map(unit => (
-                                        <option key={unit.value} value={unit.value}>{unit.label}</option>
-                                    ))}
-                                </select>
-                                <button
-                                    type="button"
-                                    onClick={() => setForceRecalculate(true)}
-                                    className={`p-1.5 rounded transition-colors ${forceRecalculate ? 'text-green-400 bg-green-400/10' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
-                                    title="Resetear tiempo (se aplicará al guardar)"
-                                >
-                                    <Icons.RotateCcw />
-                                </button>
+                {/* Internal Delete Confirmation Overlay */}
+                {showDeleteConfirm && (
+                    <div className="absolute inset-0 bg-[#0f172a]/95 backdrop-blur-sm flex items-center justify-center p-6 z-20 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="text-center w-full">
+                            <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20 shadow-xl shadow-red-500/5">
+                                <Icons.Trash2 size={24} />
                             </div>
-                        )}
-
-                        <Toggle
-                            label="Permitir configuración individual en tarjetas"
-                            checked={allowCardOverrides}
-                            onChange={setAllowCardOverrides}
-                        />
+                            <h3 className="text-lg font-bold text-white mb-2">¿Eliminar esta columna?</h3>
+                            <p className="text-sm text-slate-400 mb-6 leading-relaxed">
+                                Se eliminarán permanentemente todas las tareas que contenga.<br />Esta acción no se puede deshacer.
+                            </p>
+                            <div className="flex justify-center gap-3">
+                                <button onClick={() => setShowDeleteConfirm(false)} className="px-5 py-2.5 text-sm font-medium text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors">Cancelar</button>
+                                <button onClick={() => { onDelete(column.id); onClose(); }} className="px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 rounded-xl shadow-lg shadow-red-500/20 transition-all transform hover:-translate-y-0.5">Sí, Eliminar</button>
+                            </div>
+                        </div>
                     </div>
-
-                    <div className="flex justify-end gap-2 pt-4 border-t border-white/5">
-                        {!isCreating && (<button type="button" onClick={() => setShowDeleteConfirm(true)} className="px-4 py-2 text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors mr-auto">Eliminar</button>)}
-                        <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors">Cancelar</button>
-                        <button type="submit" disabled={!title.trim()} className="px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg shadow-lg shadow-indigo-500/20 transition-all disabled:opacity-50">{isCreating ? "Crear Columna" : "Guardar Cambios"}</button>
-                    </div>
-                </form>
-                {showDeleteConfirm && (<div className="absolute inset-0 bg-slate-900/95 flex items-center justify-center p-6 rounded-2xl z-10"><div className="text-center"><div className="w-12 h-12 bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4"><Icons.Trash2 /></div><h3 className="text-lg font-bold text-white mb-2">¿Eliminar esta columna?</h3><p className="text-sm text-gray-400 mb-6">Todas las tareas en esta columna también serán eliminadas permanentemente.</p><div className="flex justify-center gap-3"><button onClick={() => setShowDeleteConfirm(false)} className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-lg transition-colors">Cancelar</button><button onClick={() => { onDelete(column.id); onClose(); }} className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-500 rounded-lg shadow-lg shadow-red-500/20 transition-colors">Sí, Eliminar</button></div></div></div>)}
+                )}
             </div>
         </div>
     );

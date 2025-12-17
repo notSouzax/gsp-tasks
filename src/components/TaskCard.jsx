@@ -1,38 +1,22 @@
 import React from 'react';
 import { Draggable } from '@hello-pangea/dnd';
 import { Icons } from './ui/Icons';
-import { formatDate, TIME_UNITS, getEffectiveCardReminder, isReminderActive } from '../utils/helpers';
-import { Linkify, COLOR_MAP } from '../utils/helpers';
+import { formatDate, isReminderActive, Linkify, COLOR_MAP } from '../utils/helpers';
 
-
-const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, cardConfig, columns }) => {
+const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, cardConfig }) => {
     const commentCount = task.comments ? task.comments.length : 0;
     const lastComment = commentCount > 0 ? task.comments[task.comments.length - 1] : null;
-
-    const currentColumn = columns?.find(c => c.title === task.status);
-    const effectiveReminder = getEffectiveCardReminder(task, currentColumn);
-
-    // DEBUG REMINDER
-    console.log(`Card ${task.id} (${task.title}):`, {
-        next_notif: task.next_notification_at,
-        now: new Date().toISOString(),
-        active: isReminderActive(task),
-        effective: effectiveReminder,
-        column: currentColumn?.title
-    });
+    // const currentColumn = columns?.find(c => c.title === task.status); // Removed unused
+    // const effectiveReminder = getEffectiveCardReminder(task, currentColumn); // Removed unused
 
     // Force re-render when reminder is due
     const [_, setTick] = React.useState(0);
     React.useEffect(() => {
         if (!task.next_notification_at) return;
-
         const now = Date.now();
         const timeUntilDue = new Date(task.next_notification_at).getTime() - now;
-
         if (timeUntilDue > 0) {
-            const timer = setTimeout(() => {
-                setTick(t => t + 1);
-            }, timeUntilDue);
+            const timer = setTimeout(() => setTick(t => t + 1), timeUntilDue);
             return () => clearTimeout(timer);
         }
     }, [task.next_notification_at]);
@@ -51,25 +35,18 @@ const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, car
         { id: 'paused', label: 'Pausado', action: 'none' },
         { id: 'urgent', label: 'Urgente', action: 'none' }
     ];
-
     const ORDER_OPTIONS = cardConfig?.orderOptions || DEFAULT_ORDER_OPTIONS;
 
-    const formatTimeShort = (timestamp) => {
-        return formatDate(timestamp, true);
-    };
+    const formatTimeShort = (timestamp) => formatDate(timestamp, true);
 
-    // Dynamic border class based on prop
+    // Dynamic Color Logic
     const isCustomColor = color.startsWith('#');
     const borderColor = isCustomColor ? color : (COLOR_MAP[color] || '#6366f1');
-    const borderStyle = { borderTopColor: borderColor };
-    const borderClass = '';
 
-    const getColumnColor = (col) => {
-        if (col.color.startsWith('#')) return col.color;
-        return COLOR_MAP[col.color] || '#6366f1';
-    };
+    // Helper for Selects
+    // const getColumnColor = ... // Removed unused
 
-    // Text Only Mode
+    // --- TEXT ONLY MODE ---
     if (config.enableTextOnly) {
         return (
             <Draggable draggableId={'task-' + task.id.toString()} index={index}>
@@ -77,130 +54,191 @@ const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, car
                     <div
                         ref={provided.innerRef}
                         {...provided.draggableProps}
-                        {...provided.dragHandleProps}
-                        onClick={() => onClick(task)}
-                        className={`glass-panel p-4 rounded-xl cursor-pointer group ${borderClass} shadow-lg shadow-black/20 dark:!bg-[#1b2537] w-full max-w-full break-words`}
-                        style={{ borderTopWidth: '2px', borderTopStyle: 'solid', borderTopColor: borderColor, ...provided.draggableProps.style }}
+                        className="relative group bg-[#1e293b] hover:bg-[#253045] rounded-lg shadow-md hover:shadow-xl transition-all duration-200 border border-slate-700/50 cursor-grab active:cursor-grabbing overflow-hidden"
+                        style={{ borderLeft: `4px solid ${borderColor}`, ...provided.draggableProps.style }}
                     >
-                        <h3 className="font-semibold text-[var(--text-primary)] text-base leading-tight mb-1">{task.title}</h3>
-                        {task.description && (
-                            <div className="text-gray-500 text-sm line-clamp-3"><Linkify text={task.description} /></div>
-                        )}
+                        {/* Drag Handle Layer */}
+                        <div {...provided.dragHandleProps} className="absolute inset-0 z-0" />
+
+                        {/* Content Layer */}
+                        <div className="relative z-10 p-3 pointer-events-none">
+                            <div className="pr-6 pointer-events-auto w-fit max-w-full">
+                                <h3 className="font-medium text-slate-200 text-sm leading-snug select-text cursor-text w-fit">{task.title}</h3>
+                                {task.description && <p className="text-slate-500 text-xs mt-1 truncate select-text cursor-text w-fit">{task.description}</p>}
+                            </div>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onClick(task); }}
+                                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-slate-500 hover:text-indigo-400 hover:bg-indigo-400/10 p-1.5 rounded-lg transition-all pointer-events-auto"
+                                title="Editar"
+                            >
+                                <Icons.Edit size={14} />
+                            </button>
+                        </div>
                     </div>
                 )}
             </Draggable>
         );
     }
 
+    // --- FULL CARD MODE ---
     return (
         <Draggable draggableId={'task-' + task.id.toString()} index={index}>
             {(provided) => (
                 <div
+                    id={'task-' + task.id}
                     ref={provided.innerRef}
                     {...provided.draggableProps}
-                    {...provided.dragHandleProps}
-                    onClick={() => onClick(task)}
-                    className={`glass-panel p-4 rounded-xl cursor-pointer group ${borderClass} shadow-lg shadow-black/20 flex flex-col gap-3 relative dark:!bg-[#1b2537] w-full max-w-full break-words`}
-                    style={{ borderTopWidth: '2px', borderTopStyle: 'solid', ...borderStyle, ...provided.draggableProps.style }}
+                    className="relative group bg-[#1e293b] hover:bg-[#253045] rounded-xl shadow-lg hover:shadow-2xl transition-colors duration-300 w-full mb-3 flex flex-col gap-3 overflow-hidden border border-slate-700/50 shrink-0 cursor-grab active:cursor-grabbing"
+                    style={{ ...provided.draggableProps.style }}
                 >
-                    <div className="flex justify-between items-start">
-                        <div className="flex items-start gap-2 pr-6 flex-1">
-                            <h3 className="font-semibold text-[var(--text-primary)] text-base leading-tight">{task.title}</h3>
-                            {isReminderActive(task) && (
+                    {/* Drag Handle Layer */}
+                    <div {...provided.dragHandleProps} className="absolute inset-0 z-0" />
+
+                    {/* Content Container (Allows click-through to drag handle by default) */}
+                    <div className="relative z-10 flex flex-col gap-3 w-full pointer-events-none h-full">
+
+                        {/* Color Stripe Top */}
+                        <div className="h-1 w-full shrink-0" style={{ backgroundColor: borderColor }}></div>
+
+                        <div className="px-4 pb-4 pt-2 flex flex-col gap-3">
+
+                            {/* Title Row */}
+                            <div className="flex justify-between items-start gap-3">
+                                <div className="flex-1">
+                                    <h3
+                                        className="font-semibold text-slate-100 text-base leading-tight tracking-tight select-text cursor-text pointer-events-auto w-fit"
+                                    >
+                                        {task.title}
+                                    </h3>
+                                    {isReminderActive(task) && (
+                                        <div className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold text-red-400 bg-red-400/10 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                                            <Icons.Clock size={10} /> <span>VENCIDO</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all pointer-events-auto">
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); onClick(task); }}
+                                        className="text-slate-500 hover:text-indigo-400 hover:bg-indigo-400/10 p-1.5 rounded-lg transition-all"
+                                        title="Editar"
+                                    >
+                                        <Icons.Edit size={14} />
+                                    </button>
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
+                                        className="text-slate-500 hover:text-red-400 hover:bg-red-400/10 p-1.5 rounded-lg transition-all"
+                                        title="Eliminar"
+                                    >
+                                        <Icons.Trash2 size={14} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Description */}
+                            {task.description && (
                                 <div
-                                    className="bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-extrabold shrink-0 shadow-sm"
-                                    title={`Aviso programado`}
+                                    className="text-slate-400 text-sm leading-relaxed line-clamp-3 select-text cursor-text pointer-events-auto w-fit max-w-full"
                                 >
-                                    !
-                                </div>
-                            )}
-                        </div>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                onDelete(task.id);
-                            }}
-                            className="absolute top-3 right-3 text-gray-600 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity p-1"
-                            title="Eliminar tarea"
-                        >
-                            <Icons.Trash2 />
-                        </button>
-                    </div>
-
-
-
-                    {/* DEBUG: Remove after fixing */}
-                    <div className="text-[8px] text-red-500 flex flex-col">
-                        <span>{task.next_notification_at ? `Due: ${new Date(task.next_notification_at).toLocaleTimeString()}` : 'No Due'}</span>
-                        <span>{effectiveReminder ? 'Has Config' : 'No Config'}</span>
-                        <span>{isReminderActive(task) ? 'Active' : 'Pending'}</span>
-                    </div>
-
-                    {task.description && (
-                        <div className="mt-1 text-gray-500 text-sm line-clamp-2"><Linkify text={task.description} /></div>
-                    )}
-
-                    {lastComment && (
-                        <div className="bg-indigo-500/10 border border-indigo-500/20 rounded-lg p-2.5">
-                            <div className="flex justify-between items-center mb-1">
-                                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider">Último comentario</span>
-                                <span className="text-[10px] font-bold text-indigo-400 dark:text-indigo-300/70 dark:font-normal">{formatTimeShort(lastComment.createdAt)}</span>
-                            </div>
-                            <p className="text-xs text-gray-800 dark:text-indigo-100 line-clamp-2 leading-relaxed whitespace-pre-wrap">"{lastComment.text}"</p>
-                        </div>
-                    )}
-
-                    <div className="flex items-center justify-between pt-2 border-t border-white/5 flex-wrap gap-2">
-                        <div className="flex items-center gap-3">
-                            <div className="flex items-center text-gray-500 text-xs" title="Fecha de creación">
-                                <Icons.Calendar />
-                                <span className="ml-1">{formatDate(task.createdAt)}</span>
-                            </div>
-                            {commentCount > 0 && (
-                                <div className="flex items-center text-indigo-400 text-xs">
-                                    <Icons.MessageSquare />
-                                    <span className="ml-1">{commentCount}</span>
+                                    <Linkify text={task.description} />
                                 </div>
                             )}
 
-                        </div>
-
-                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                            {config.enableMove && columns && (
-                                <select
-                                    value={task.status}
-                                    onChange={(e) => onUpdate({ ...task, status: e.target.value })}
-                                    className="bg-white/5 border border-white/10 rounded px-1 py-0.5 text-[10px] text-gray-400 focus:text-white outline-none max-w-[120px]"
-                                    title="Mover a..."
-                                >
-                                    {columns.map(c => (
-                                        <option key={c.id} value={c.title} style={{ backgroundColor: getColumnColor(c), color: '#fff' }}>
-                                            {c.title}
-                                        </option>
+                            {/* CHECKLIST */}
+                            {Array.isArray(task.checklist) && task.checklist.length > 0 && (
+                                <div className="bg-slate-950/30 rounded-lg p-2 border border-slate-700/50 space-y-1.5 pointer-events-auto">
+                                    {task.checklist.map(item => (
+                                        <div
+                                            key={item.id}
+                                            className="flex items-start gap-2.5 group/item cursor-pointer"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const newChecklist = task.checklist.map(i => i.id === item.id ? { ...i, completed: !i.completed } : i);
+                                                onUpdate({ ...task, checklist: newChecklist });
+                                            }}
+                                        >
+                                            <div
+                                                className={`mt-0.5 transition-transform duration-200 ${item.completed ? 'scale-110' : 'group-hover/item:scale-110 text-slate-500 hover:text-indigo-400'}`}
+                                                style={item.completed ? { color: borderColor } : {}}
+                                            >
+                                                {item.completed ? <Icons.CheckSquare size={14} /> : <Icons.Square size={14} />}
+                                            </div>
+                                            <span className={`text-xs flex-1 transition-colors ${item.completed ? 'text-slate-600 line-through decoration-slate-600' : 'text-slate-300'}`}>
+                                                {item.text}
+                                            </span>
+                                        </div>
                                     ))}
-                                </select>
+                                </div>
                             )}
 
-                            {config.enableOrder && (
-                                <select
-                                    value={task.sortOptionId || ""}
-                                    onChange={(e) => {
-                                        const opt = ORDER_OPTIONS.find(o => o.id === e.target.value);
-                                        if (opt) {
-                                            onMove(task, opt.action, opt.id);
-                                        }
-                                    }}
-                                    className="bg-white/5 border border-white/10 rounded px-1 py-0.5 text-[10px] text-gray-400 focus:text-white outline-none max-w-[120px]"
-                                    title="Ordenar/Estado..."
+                            {/* Last Comment Bubble */}
+                            {lastComment && (
+                                <div
+                                    className="relative rounded-2xl rounded-tl-none p-3 text-xs"
+                                    style={{ backgroundColor: `${borderColor}10`, border: `1px solid ${borderColor}20` }}
                                 >
-                                    <option value="" disabled>Estado...</option>
-                                    {ORDER_OPTIONS.map(opt => (
-                                        <option key={opt.id} value={opt.id} className="bg-slate-800 text-white">
-                                            {opt.label}
-                                        </option>
-                                    ))}
-                                </select>
+                                    <div className="flex justify-between items-center mb-1 bg-transparent">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: borderColor }}>
+                                            ÚLTIMO COMENTARIO
+                                        </span>
+                                        <span className="text-[10px] opacity-60" style={{ color: borderColor }}>
+                                            {formatTimeShort(lastComment.createdAt || lastComment.created_at)}
+                                        </span>
+                                    </div>
+                                    <p className="text-slate-300 leading-snug line-clamp-2 italic select-text cursor-text pointer-events-auto w-fit">"{lastComment.text}"</p>
+                                </div>
                             )}
+
+                            {/* Footer Meta & Actions */}
+                            <div className="flex items-center justify-between pt-2 border-t border-slate-700/50 mt-1">
+                                {/* Meta Info */}
+                                <div className="flex items-center gap-3 text-slate-500">
+                                    <div className="flex items-center text-xs gap-1" title="Creado">
+                                        <Icons.Calendar size={12} />
+                                        <span>{formatDate(task.createdAt)}</span>
+                                    </div>
+
+                                    {(commentCount > 0 || (task.checklist && task.checklist.length > 0)) && (
+                                        <div className="flex items-center gap-2">
+                                            {commentCount > 0 && (
+                                                <div className="flex items-center text-xs gap-0.5" style={{ color: borderColor }}>
+                                                    <Icons.MessageSquare size={12} />
+                                                    <span className="font-medium">{commentCount}</span>
+                                                </div>
+                                            )}
+                                            {task.checklist && task.checklist.length > 0 && (
+                                                <div className="flex items-center text-xs gap-0.5" style={{ color: borderColor }}>
+                                                    <Icons.CheckSquare size={12} />
+                                                    <span className="font-medium">
+                                                        {task.checklist.filter(i => i.completed).length}/{task.checklist.length}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Actions Dropdowns */}
+                                <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                    {config.enableOrder && (
+                                        <div className="relative group/select flex items-center">
+                                            <select
+                                                value={task.sortOptionId || ""}
+                                                onChange={(e) => {
+                                                    const opt = ORDER_OPTIONS.find(o => o.id === e.target.value);
+                                                    if (opt) onMove(task, opt.action, opt.id);
+                                                }}
+                                                className="appearance-none bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-md py-1 pl-2 pr-6 text-[10px] text-slate-300 focus:text-white outline-none cursor-pointer transition-colors"
+                                            >
+                                                <option value="" disabled>Estado</option>
+                                                {ORDER_OPTIONS.map(opt => (
+                                                    <option key={opt.id} value={opt.id}>{opt.label}</option>
+                                                ))}
+                                            </select>
+                                            <Icons.ChevronDown size={10} className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

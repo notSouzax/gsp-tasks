@@ -28,6 +28,9 @@ const AppContent = () => {
   const [boardToDelete, setBoardToDelete] = useState(null);
   const [pendingVoiceTask, setPendingVoiceTask] = useState(null);
 
+  // Navigation State
+  const [pendingTaskId, setPendingTaskId] = useState(null);
+
   // View State
   const [activeView, setActiveView] = useState('board'); // 'board' | 'dashboard'
 
@@ -92,7 +95,7 @@ const AppContent = () => {
   const finalizeVoiceTask = async (confirmedData) => {
     if (!pendingVoiceTask) return;
     const { targetBoard, targetColumn } = pendingVoiceTask;
-    const { title, description, initialComment } = confirmedData;
+    const { title, description, initialComment, checklist } = confirmedData;
 
     // Logic adapted from original handleVoiceCommand but using confirmed data
     const newTask = {
@@ -108,7 +111,8 @@ const AppContent = () => {
       reminder_enabled: false,
       reminder_value: null,
       reminder_unit: 'minutes',
-      next_notification_at: null
+      next_notification_at: null,
+      checklist: checklist || []
     };
 
     // Apply defaults
@@ -136,8 +140,10 @@ const AppContent = () => {
       column_id: targetColumn.id,
       title: newTask.title,
       description: newTask.description,
+
       position: (targetColumn.cards || []).length,
-      next_notification_at: newTask.next_notification_at ? new Date(newTask.next_notification_at).toISOString() : null
+      next_notification_at: newTask.next_notification_at ? new Date(newTask.next_notification_at).toISOString() : null,
+      checklist: newTask.checklist
     }]).select().single();
 
     if (!error && initialComment) {
@@ -243,10 +249,12 @@ const AppContent = () => {
       if (userBoards) {
         userBoards = userBoards.map(board => ({
           ...board,
+          columnWidth: board.column_width, // Map DB field
           columns: (board.columns || [])
-            .sort((a, b) => a.position - b.position)
+            .sort((a, b) => (a.position || 0) - (b.position || 0))
             .map(col => ({
               ...col,
+              isCollapsed: col.is_collapsed, // Map DB field
               cards: (col.cards || [])
                 .sort((a, b) => a.position - b.position)
                 .map(task => ({
@@ -295,7 +303,8 @@ const AppContent = () => {
   // Apply Board-Specific Settings (Column Width)
   useEffect(() => {
     if (!activeBoard) return;
-    const widthToApply = activeBoard.columnWidth || settings.columnWidth || 365;
+    if (!activeBoard) return;
+    const widthToApply = activeBoard.columnWidth || activeBoard.column_width || settings.columnWidth || 365;
     document.documentElement.style.setProperty('--column-width', `${widthToApply}px`);
   }, [activeBoard, settings.columnWidth]);
 
@@ -396,7 +405,7 @@ const AppContent = () => {
   const handleGlobalTaskSave = async (taskData) => {
     // Re-use logic from finalizeVoiceTask - they are essentially the same:
     // constructing a task and inserting it into a potentially different board/column.
-    const { targetBoardId, targetColumnId, title, description, initialComment } = taskData;
+    const { targetBoardId, targetColumnId, title, description, initialComment, checklist } = taskData;
 
     const targetBoard = boards.find(b => b.id == targetBoardId);
     const targetColumn = targetBoard?.columns.find(c => c.id == targetColumnId);
@@ -418,7 +427,8 @@ const AppContent = () => {
       reminder_enabled: false,
       reminder_value: null,
       reminder_unit: 'minutes',
-      next_notification_at: null
+      next_notification_at: null,
+      checklist: checklist || []
     };
 
     // Apply defaults
@@ -445,8 +455,10 @@ const AppContent = () => {
       column_id: targetColumn.id,
       title: newTask.title,
       description: newTask.description,
+
       position: (targetColumn.cards || []).length,
-      next_notification_at: newTask.next_notification_at ? new Date(newTask.next_notification_at).toISOString() : null
+      next_notification_at: newTask.next_notification_at ? new Date(newTask.next_notification_at).toISOString() : null,
+      checklist: newTask.checklist
     }]).select().single();
 
     if (!error && initialComment) {
@@ -461,6 +473,14 @@ const AppContent = () => {
     if (targetBoard.id !== activeBoardId) {
       setActiveBoardId(targetBoard.id);
     }
+  };
+
+  const handleNavigateToTask = (task) => {
+    setActiveView('board');
+    if (task.boardId !== activeBoardId) {
+      setActiveBoardId(task.boardId);
+    }
+    setPendingTaskId(task.id);
   };
 
   console.log("AppContent: Rendering Main UI. ActiveBoard:", activeBoard?.id);
@@ -478,15 +498,15 @@ const AppContent = () => {
       />
       <div className="flex-1 flex flex-col min-w-0 bg-[var(--bg-primary)] relative transition-colors duration-300">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-500/10 via-[var(--bg-primary)]/0 to-[var(--bg-primary)]/0 pointer-events-none" />
-        <header className="h-16 border-b border-[var(--border-color)] flex items-center justify-between px-6 bg-[var(--bg-primary)]/50 backdrop-blur-xl z-10 transition-colors duration-300">
+        <header className="h-16 border-b border-white/5 flex items-center justify-between px-6 bg-[#0f172a]/80 backdrop-blur-md z-10 transition-colors duration-300 shadow-sm">
           <div className="flex items-center gap-4">
-            <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-[var(--text-primary)] to-[var(--text-secondary)]">
+            <h2 className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400 tracking-tight">
               {activeView === 'dashboard' ? 'Dashboard' : activeBoard?.title}
             </h2>
             {activeView === 'board' && (
               <button
                 onClick={() => setShowBoardSettings(true)}
-                className="p-1.5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 rounded-lg transition-colors"
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded-lg transition-all"
                 title="Configuración del Tablero"
               >
                 <Icons.Settings />
@@ -497,37 +517,35 @@ const AppContent = () => {
             {/* GLOBAL NEW TASK BUTTON */}
             <button
               onClick={() => setShowGlobalTaskModal(true)}
-              className="p-2 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 hover:text-indigo-300 rounded-lg transition-all flex items-center gap-2"
+              className="w-9 h-9 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-lg transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center group"
               title="Nueva Tarea Global"
             >
-              <span className="text-lg font-bold leading-none">+</span>
-              <span className="text-xs font-medium hidden sm:block">Nueva Tarea</span>
+              <Icons.Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
             </button>
 
             {isSupported && (
               <button
                 onClick={isRecording ? stopRecording : startRecording}
-                className={`p-2 rounded-lg transition-all duration-300 flex items-center gap-2 ${isRecording
+                className={`w-9 h-9 rounded-lg transition-all duration-300 flex items-center justify-center ${isRecording
                   ? 'bg-red-500/20 text-red-500 hover:bg-red-500/30 animate-pulse'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5'
+                  : 'text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10'
                   }`}
                 title={isRecording ? "Detener grabación" : "Crear tarea con voz"}
               >
                 {isRecording ? <Icons.MicOff /> : <Icons.Mic />}
-                {isRecording && <span className="text-xs font-medium">Escuchando...</span>}
               </button>
             )}
-            <button className="p-2 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 rounded-lg transition-colors"><Icons.Search /></button>
-            <div className="h-8 w-px bg-[var(--border-color)] mx-1" />
+            <button className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"><Icons.Search /></button>
+            <div className="h-6 w-px bg-slate-700/50 mx-1" />
             <div
-              className="flex items-center gap-3 pl-2 cursor-pointer hover:opacity-80 transition-opacity"
+              className="flex items-center gap-3 pl-2 cursor-pointer group"
               onClick={() => setShowProfile(true)}
             >
               <div className="text-right hidden sm:block">
-                <div className="text-sm font-medium text-[var(--text-primary)]">{currentUser?.name || 'Usuario'}</div>
-                <div className="text-xs text-[var(--text-secondary)] capitalize">{currentUser?.role || 'Invitado'}</div>
+                <div className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">{currentUser?.name || 'Usuario'}</div>
+                <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">{currentUser?.role || 'Invitado'}</div>
               </div>
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20">
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20 ring-2 ring-transparent group-hover:ring-indigo-500/50 transition-all">
                 {currentUser?.name?.charAt(0) || 'U'}
               </div>
             </div>
@@ -535,10 +553,18 @@ const AppContent = () => {
         </header>
 
         {activeView === 'dashboard' ? (
-          <Dashboard boards={boards} />
+          <Dashboard boards={boards} onNavigateToTask={handleNavigateToTask} />
         ) : (
           <>
-            {activeBoard && <KanbanBoard key={activeBoard.id} boardId={activeBoard.id} initialColumns={activeBoard.columns} onColumnsChange={(newCols) => updateActiveBoard({ columns: newCols })} />}
+            {activeBoard && (
+              <KanbanBoard
+                key={activeBoard.id}
+                boardId={activeBoard.id}
+                initialColumns={activeBoard.columns}
+                onColumnsChange={(newCols) => updateActiveBoard({ columns: newCols })}
+                initialTaskId={pendingTaskId}
+              />
+            )}
           </>
         )}
       </div>

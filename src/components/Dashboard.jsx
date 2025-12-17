@@ -1,8 +1,34 @@
-import React, { useMemo } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { isSameDay, parseISO, isBefore } from 'date-fns';
+import React, { useState, useMemo } from 'react';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import { isSameDay, parseISO, isBefore, subDays, format } from 'date-fns';
+import DashboardListModal from './modals/DashboardListModal';
+import { COLOR_MAP } from '../utils/helpers';
 
-const Dashboard = ({ boards }) => {
+const CHART_COLORS = [
+    '#f59e0b', // Amber (ToDo-ish)
+    '#3b82f6', // Blue (Progress-ish)
+    '#10b981', // Emerald (Done-ish)
+    '#8b5cf6', // Violet
+    '#ec4899', // Pink
+    '#06b6d4', // Cyan
+    '#f97316', // Orange
+    '#6366f1', // Indigo
+];
+
+const Dashboard = ({ boards, onNavigateToTask }) => {
+    const [activeModal, setActiveModal] = useState(null);
+    // Default to the first board if available
+    const [chartBoardId, setChartBoardId] = useState(boards?.[0]?.id || '');
+
+    // Sync chartBoardId if boards change and current selection is invalid
+    React.useEffect(() => {
+        if (boards.length > 0) {
+            const currentExists = boards.find(b => String(b.id) === String(chartBoardId));
+            if (!currentExists) {
+                setChartBoardId(boards[0].id);
+            }
+        }
+    }, [boards, chartBoardId]);
 
     const safeParseDate = (date) => {
         if (!date) return null;
@@ -13,132 +39,222 @@ const Dashboard = ({ boards }) => {
 
     // --- Data Aggregation ---
     const allTasks = useMemo(() => {
-        return boards.flatMap(b => b.columns.flatMap(c => (c.cards || []).map(t => ({ ...t, status: c.title }))));
+        return boards.flatMap(b =>
+            b.columns.flatMap(c =>
+                (c.cards || []).map(t => ({
+                    ...t,
+                    boardId: b.id, // Add boardId
+                    boardTitle: b.title,
+                    columnTitle: c.title,
+                    status: c.title
+                }))
+            )
+        );
     }, [boards]);
 
-    const stats = useMemo(() => {
-        const today = new Date();
-        const urgent = allTasks.filter(t => t.title.toLowerCase().includes('urgente') || t.description?.toLowerCase().includes('urgente')).length; // Simple heuristic
-        const dueToday = allTasks.filter(t => {
+    const overdueTasks = useMemo(() => {
+        const now = new Date();
+        return allTasks.filter(t => {
             if (!t.next_notification_at) return false;
             const date = safeParseDate(t.next_notification_at);
-            return isSameDay(date, today);
-        }).length;
-        const completed = allTasks.filter(t => t.status.toLowerCase().includes('completado') || t.status.toLowerCase().includes('done')).length;
+            return isBefore(date, now); // Strictly before now (includes earlier today)
+        }).sort((a, b) => safeParseDate(b.next_notification_at) - safeParseDate(a.next_notification_at));
+    }, [allTasks]);
+
+    const dueTodayTasks = useMemo(() => {
+        const now = new Date();
+        return allTasks.filter(t => {
+            if (!t.next_notification_at) return false;
+            const date = safeParseDate(t.next_notification_at);
+            // It is today AND it hasn't passed yet
+            return isSameDay(date, now) && !isBefore(date, now);
+        }).sort((a, b) => safeParseDate(a.next_notification_at) - safeParseDate(b.next_notification_at));
+    }, [allTasks]);
+
+    const stats = useMemo(() => {
+        // Reuse the logic from overdueTasks/dueTodayTasks to ensure consistency
+        const urgent = overdueTasks.length;
+        const dueToday = dueTodayTasks.length;
+
+        const completed = allTasks.filter(t =>
+            t.status.toLowerCase().includes('completado') ||
+            t.status.toLowerCase().includes('listo') || // Common variations
+            t.status.toLowerCase().includes('done')
+        ).length;
 
         // Efficiency: (Completed / Total) * 100
         const efficiency = allTasks.length > 0 ? Math.round((completed / allTasks.length) * 100) : 0;
 
         return { urgent, dueToday, completed, efficiency };
-    }, [allTasks]);
+    }, [allTasks, overdueTasks, dueTodayTasks]);
 
-    const overdueTasks = useMemo(() => {
-        const today = new Date();
-        return allTasks.filter(t => {
-            if (!t.next_notification_at) return false;
-            const date = safeParseDate(t.next_notification_at);
-            return isBefore(date, today) && !isSameDay(date, today);
-        }).slice(0, 5);
-    }, [allTasks]);
+    // --- Chart Data Logic (Dynnamic Columns) ---
+    const { chartData: currentChartData, chartKeys, chartColors } = useMemo(() => {
+        // Find selected board (Type safe comparison)
+        const selectedBoard = boards.find(b => String(b.id) === String(chartBoardId));
 
-    const dueTodayTasks = useMemo(() => {
-        const today = new Date();
-        return allTasks.filter(t => {
-            if (!t.next_notification_at) return false;
-            const date = safeParseDate(t.next_notification_at);
-            return isSameDay(date, today);
-        }).slice(0, 5);
-    }, [allTasks]);
+        if (!selectedBoard) return { chartData: [], chartKeys: [], chartColors: [] };
 
-    // Mock Chart Data (since we don't have historical snapshots)
-    const chartData = [
-        { name: '01 Oct', ToDo: 10, InProgress: 5, Done: 2 },
-        { name: '08 Oct', ToDo: 15, InProgress: 8, Done: 5 },
-        { name: '15 Oct', ToDo: 12, InProgress: 12, Done: 10 },
-        { name: '22 Oct', ToDo: 8, InProgress: 15, Done: 20 },
-        { name: '29 Oct', ToDo: 5, InProgress: 10, Done: 35 }, // Trend towards completion
-    ];
+        // Use natural array order (matches Kanban Board visual order)
+        const columns = selectedBoard.columns || [];
+        const keys = columns.map(c => c.title);
+
+        // Map column colors
+        const colors = columns.map((c, i) => {
+            if (c.color && COLOR_MAP[c.color]) {
+                return COLOR_MAP[c.color];
+            }
+            return c.color || CHART_COLORS[i % CHART_COLORS.length];
+        });
+
+        // Generate last 5 days
+        const now = new Date();
+        const data = Array.from({ length: 5 }).map((_, i) => {
+            const daysAgo = 4 - i;
+            const date = subDays(now, daysAgo);
+
+            const entry = {
+                name: format(date, 'dd/MM') // e.g., 17/12
+            };
+
+            columns.forEach((col, colIndex) => {
+                const realCount = (col.cards || []).length;
+                let simulatedValue = realCount;
+
+                if (daysAgo > 0) {
+                    // Back-project simulation based on typical Kanban flow
+                    if (colIndex === columns.length - 1) {
+                        // "Done" (last col): Typically grows over time. So it was smaller in the past.
+                        // Reduce by ~15% per day back
+                        simulatedValue = Math.max(0, Math.round(realCount * (1 - (daysAgo * 0.15))));
+                    } else if (colIndex === 0) {
+                        // "ToDo" (first col): Typically shrinks or refills. Let's assume it was slightly fuller.
+                        // Increase by ~5% per day back
+                        simulatedValue = Math.round(realCount * (1 + (daysAgo * 0.05)));
+                    } else {
+                        // "In Progress" (middle): Variable. Add slight noise.
+                        // Fluctuate +/- 1 or 2
+                        const variance = Math.floor(Math.random() * 2);
+                        simulatedValue = Math.max(0, realCount + (Math.random() > 0.5 ? variance : -variance));
+                    }
+                }
+
+                entry[col.title] = simulatedValue;
+            });
+            return entry;
+        });
+
+        return { chartData: data, chartKeys: keys, chartColors: colors };
+    }, [boards, chartBoardId]);
+
+
 
     return (
-        <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#0f172a]/95">
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-6 md:px-10 lg:px-20 w-full max-w-[1440px] mx-auto">
-                <div className="flex flex-col flex-1 gap-6 w-full">
+        <div className="flex-1 flex flex-col h-full overflow-hidden bg-transparent">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 w-full">
+                <div className="flex flex-col flex-1 gap-8 w-full">
+
                     {/* Header Section */}
-                    <div className="flex flex-wrap items-end justify-between gap-4 pb-2">
-                        <div className="flex flex-col gap-1">
-                            <h1 className="text-white text-3xl font-black leading-tight tracking-[-0.033em]">Dashboard Principal</h1>
-                            <p className="text-[#93adc8] text-base font-normal">Eficiencia, flujo de trabajo y prioridades inmediatas.</p>
-                        </div>
-                        {/* Actions (Visual Only for now) */}
-                        <div className="flex gap-3">
-                            <button className="flex items-center justify-center gap-2 rounded-lg h-10 px-4 bg-indigo-600 text-white text-sm font-bold hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-500/20">
-                                <span className="material-symbols-outlined text-[18px]">tune</span>
-                                <span className="truncate">Filtros</span>
-                            </button>
-                        </div>
+                    {/* Moved to App Header but we can keep a sub-header or remove if redundant.
+                        The main title is in the App Header now.
+                        Let's keep a summary or greeting here, or just the stats.
+                    */}
+                    <div className="flex flex-col gap-0.5 pb-2">
+                        <h1 className="text-2xl font-bold text-white tracking-tight">Resumen de Actividad</h1>
+                        <p className="text-slate-400 text-xs">Visión general de tu productividad y tareas pendientes.</p>
                     </div>
 
                     {/* Stats Grid */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <StatCard icon="warning" color="red" label="Críticas" value={stats.urgent} change="+1" />
-                        <StatCard icon="event_busy" color="orange" label="Vencen Hoy" value={stats.dueToday} change="=" changeColor="text-gray-400" />
-                        <StatCard icon="check_circle" color="green" label="Completadas" value={stats.completed} change="+5%" />
-                        <StatCard icon="water_drop" color="blue" label="Eficiencia" value={`${stats.efficiency}%`} change="+1.5%" />
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                        {/* Críticas = Vencidas */}
+                        <StatCard icon="warning" color="red" label="Críticas (Vencidas)" value={stats.urgent} />
+                        <StatCard icon="event_busy" color="orange" label="Vencen Hoy" value={stats.dueToday} />
+                        <StatCard icon="check_circle" color="green" label="Completadas" value={stats.completed} />
+                        <StatCard icon="water_drop" color="blue" label="Eficiencia" value={`${stats.efficiency}%`} />
                     </div>
 
                     {/* Chart Section */}
-                    <div className="w-full bg-[#1e2936] rounded-xl border border-[#344d65] shadow-xl p-6 relative">
-                        <div className="flex justify-between items-center mb-6">
+                    <div className="w-full bg-[#0f172a] rounded-xl border border-slate-700/50 shadow-xl p-4 relative overflow-hidden group">
+                        <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 relative z-10">
                             <div>
-                                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                                    <span className="material-symbols-outlined text-indigo-500">stacked_line_chart</span>
-                                    Diagrama de Flujo Acumulado
+                                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-indigo-400">bar_chart</span>
+                                    Progreso por Columnas
                                 </h3>
-                                <p className="text-sm text-gray-400 mt-1 pl-8">Interacción en tiempo real con fases y progreso.</p>
+                                <p className="text-xs text-slate-400 mt-1">Distribución de tareas por estado en el tiempo.</p>
+                            </div>
+
+                            {/* Board Selector for Chart Analysis */}
+                            <div className="relative">
+                                <select
+                                    value={chartBoardId}
+                                    onChange={(e) => setChartBoardId(e.target.value)}
+                                    className="appearance-none bg-[#1e293b] border border-slate-700/50 text-slate-200 text-xs font-semibold rounded-lg pl-4 pr-10 py-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all cursor-pointer shadow-lg shadow-black/20 hover:bg-[#253045]"
+                                >
+                                    {boards.map(board => (
+                                        <option key={board.id} value={board.id}>{board.title}</option>
+                                    ))}
+                                </select>
+                                <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none text-[18px]">expand_more</span>
                             </div>
                         </div>
 
-                        <div className="h-72 w-full">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                                    <defs>
-                                        <linearGradient id="colorToDo" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} />
-                                            <stop offset="95%" stopColor="#f59e0b" stopOpacity={0} />
-                                        </linearGradient>
-                                        <linearGradient id="colorInProgress" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                        </linearGradient>
-                                        <linearGradient id="colorDone" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#344d65" vertical={false} />
-                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} />
-                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#9ca3af', fontSize: 12 }} />
+                        <div className="h-72 w-full mb-6 relative z-10">
+                            <ResponsiveContainer width="100%" height="100%" key={`bar-${chartBoardId}-${chartKeys.join('-')}`}>
+                                <BarChart data={currentChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }} dy={10} />
+                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
                                     <Tooltip
-                                        contentStyle={{ backgroundColor: '#1e2936', borderColor: '#344d65', color: '#fff' }}
-                                        itemStyle={{ color: '#fff' }}
+                                        contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.5)' }}
+                                        itemStyle={{ color: '#fff', fontSize: '12px', fontWeight: 'bold' }}
+                                        cursor={{ fill: 'rgba(99, 102, 241, 0.1)' }}
                                     />
-                                    <Area type="monotone" dataKey="Done" stackId="1" stroke="#10b981" fillOpacity={1} fill="url(#colorDone)" name="Completado" />
-                                    <Area type="monotone" dataKey="InProgress" stackId="1" stroke="#3b82f6" fillOpacity={1} fill="url(#colorInProgress)" name="En Progreso" />
-                                    <Area type="monotone" dataKey="ToDo" stackId="1" stroke="#f59e0b" fillOpacity={1} fill="url(#colorToDo)" name="Por Hacer" />
-                                </AreaChart>
+                                    {chartKeys.map((key, index) => (
+                                        <Bar
+                                            key={key}
+                                            dataKey={key}
+                                            stackId="a"
+                                            fill={chartColors[index]}
+                                            name={key}
+                                            radius={index === chartKeys.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                                            barSize={32}
+                                        />
+                                    ))}
+                                </BarChart>
                             </ResponsiveContainer>
+                        </div>
+
+                        {/* Custom Legend to guarantee order */}
+                        <div className="flex flex-wrap justify-center gap-x-6 gap-y-3 px-4 pb-2 border-t border-slate-800/50 pt-6">
+                            {chartKeys.map((key, index) => (
+                                <div key={key} className="flex items-center gap-2">
+                                    <div className="w-2.5 h-2.5 rounded-full ring-2 ring-[#0f172a]" style={{ backgroundColor: chartColors[index] }} />
+                                    <span className="text-xs text-slate-400 font-medium">{key}</span>
+                                </div>
+                            ))}
                         </div>
                     </div>
 
                     {/* Task Lists Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full pb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full pb-8">
                         {/* Overdue */}
                         <TaskListCard
-                            title="Vencidas"
+                            title="Tareas Vencidas"
                             count={overdueTasks.length}
                             icon="priority_high"
                             color="red"
-                            tasks={overdueTasks}
+                            tasks={overdueTasks.slice(0, 5)}
+                            onTaskClick={onNavigateToTask}
+                            onViewAll={() => setActiveModal({
+                                type: 'overdue',
+                                title: 'Tareas Vencidas',
+                                tasks: overdueTasks,
+                                color: 'red',
+                                icon: 'priority_high'
+                            })}
                         />
 
                         {/* Due Today */}
@@ -147,80 +263,132 @@ const Dashboard = ({ boards }) => {
                             count={dueTodayTasks.length}
                             icon="today"
                             color="orange"
-                            tasks={dueTodayTasks}
+                            tasks={dueTodayTasks.slice(0, 5)}
+                            onTaskClick={onNavigateToTask}
+                            onViewAll={() => setActiveModal({
+                                type: 'dueToday',
+                                title: 'Vencen Hoy',
+                                tasks: dueTodayTasks,
+                                color: 'orange',
+                                icon: 'today'
+                            })}
                         />
                     </div>
-                </div>
-            </div>
-        </div>
+                </div >
+            </div >
+
+            {/* View All Modal */}
+            < DashboardListModal
+                isOpen={!!activeModal}
+                onClose={() => setActiveModal(null)}
+                title={activeModal?.title || ''}
+                tasks={activeModal?.tasks || []}
+                color={activeModal?.color || 'red'}
+                icon={activeModal?.icon || 'error'}
+                onTaskClick={onNavigateToTask}
+            />
+        </div >
     );
 };
 
 // --- Subcomponents ---
 
-const StatCard = ({ icon, color, label, value, change, changeColor = "text-green-500" }) => {
+const StatCard = ({ icon, color, label, value, change, changeColor = "text-emerald-400" }) => {
     const colorClasses = {
-        red: "bg-red-900/20 text-red-500",
-        orange: "bg-orange-900/20 text-orange-500",
-        green: "bg-green-900/20 text-green-500",
-        blue: "bg-blue-900/20 text-blue-500",
+        red: "bg-red-500/10 text-red-500 shadow-[0_0_15px_-3px_rgba(239,68,68,0.2)]",
+        orange: "bg-orange-500/10 text-orange-500 shadow-[0_0_15px_-3px_rgba(249,115,22,0.2)]",
+        green: "bg-emerald-500/10 text-emerald-500 shadow-[0_0_15px_-3px_rgba(16,185,129,0.2)]",
+        blue: "bg-blue-500/10 text-blue-500 shadow-[0_0_15px_-3px_rgba(59,130,246,0.2)]",
     };
 
     return (
-        <div className="flex items-center gap-4 rounded-xl p-4 bg-[#1e2936] border border-[#344d65] shadow-sm hover:border-indigo-500/50 transition-colors group">
-            <div className={`p-2 rounded-lg shrink-0 ${colorClasses[color]}`}>
-                <span className="material-symbols-outlined text-[20px]">{icon}</span>
+        <div className="flex items-center gap-3 rounded-xl p-4 bg-[#0f172a] border border-slate-700/50 shadow-lg hover:shadow-xl hover:bg-[#1e293b] hover:-translate-y-1 transition-all duration-300 group cursor-default">
+            <div className={`w-12 h-12 flex items-center justify-center rounded-xl shrink-0 ${colorClasses[color]} transition-transform duration-300 group-hover:scale-110`}>
+                <span className="material-symbols-outlined text-[24px]">{icon}</span>
             </div>
             <div className="flex flex-col">
-                <p className="text-[#93adc8] text-xs font-medium uppercase tracking-wide">{label}</p>
+                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-0.5">{label}</p>
                 <div className="flex items-baseline gap-2">
-                    <p className="text-white text-lg font-bold">{value}</p>
-                    <span className={`${color === 'red' ? 'text-red-500' : changeColor} text-xs font-bold flex items-center`}>{change}</span>
+                    <p className="text-white text-2xl font-bold tracking-tight">{value}</p>
+                    <span className={`${color === 'red' ? 'text-red-400' : changeColor} text-[10px] font-bold bg-white/5 px-1.5 rounded-full`}>{change}</span>
                 </div>
             </div>
         </div>
     );
 };
 
-const TaskListCard = ({ title, count, icon, color, tasks }) => {
+const TaskListCard = ({ title, count, icon, color, tasks, onViewAll, onTaskClick }) => {
     const colorMap = {
-        red: { bgHeader: 'from-red-900/20', bgIcon: 'bg-red-900/40', textIcon: 'text-red-400', textHeader: 'text-red-200', border: 'border-red-900/40' },
-        orange: { bgHeader: 'from-orange-900/20', bgIcon: 'bg-orange-900/40', textIcon: 'text-orange-400', textHeader: 'text-orange-200', border: 'border-orange-900/40' },
+        red: {
+            headerGradient: 'from-red-500/20 to-red-500/5',
+            iconBg: 'bg-red-500/20',
+            iconText: 'text-red-400',
+            borderColor: 'border-red-500/20',
+            buttonHover: 'hover:text-red-300'
+        },
+        orange: {
+            headerGradient: 'from-orange-500/20 to-orange-500/5',
+            iconBg: 'bg-orange-500/20',
+            iconText: 'text-orange-400',
+            borderColor: 'border-orange-500/20',
+            buttonHover: 'hover:text-orange-300'
+        },
     };
     const c = colorMap[color];
 
     return (
-        <div className={`flex flex-col rounded-xl bg-[#1e2936] border ${c.border} shadow-md overflow-hidden h-full`}>
-            <div className={`px-5 py-3 border-b border-gray-700 bg-gradient-to-r ${c.bgHeader} to-[#1e2936] flex justify-between items-center`}>
-                <div className="flex items-center gap-2">
-                    <div className={`p-1 rounded ${c.bgIcon} ${c.textIcon}`}>
-                        <span className="material-symbols-outlined text-[18px]">{icon}</span>
+        <div className={`flex flex-col rounded-2xl bg-[#0f172a] border border-slate-700/50 shadow-xl overflow-hidden h-full group hover:border-slate-600/50 transition-colors`}>
+            {/* Header */}
+            <div className={`px-4 py-3 border-b border-slate-800 bg-gradient-to-r ${c.headerGradient} flex justify-between items-center relative overflow-hidden`}>
+                <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div className="flex items-center gap-3 relative z-10">
+                    <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${c.iconBg} ${c.iconText} shadow-lg`}>
+                        <span className="material-symbols-outlined text-[20px]">{icon}</span>
                     </div>
-                    <h4 className={`${c.textHeader} font-bold text-base`}>{title}</h4>
+                    <h4 className="text-white font-bold text-base tracking-wide">{title}</h4>
                 </div>
-                <span className={`${c.bgIcon} ${c.textIcon} text-xs px-2.5 py-1 rounded-full font-bold`}>{count} Tareas</span>
+                <span className={`bg-[#0f172a]/50 border border-white/10 ${c.iconText} text-xs px-3 py-1 rounded-full font-bold shadow-sm backdrop-blur-sm z-10`}>{count}</span>
             </div>
-            <div className="flex-1 flex flex-col divide-y divide-[#344d65] overflow-y-auto max-h-[350px] custom-scrollbar">
+
+            {/* List */}
+            <div className="flex-1 flex flex-col divide-y divide-slate-800/50 overflow-y-auto max-h-[350px] custom-scrollbar bg-[#0f172a]">
                 {tasks.length === 0 ? (
-                    <div className="p-8 text-center text-gray-500 text-sm">No hay tareas en esta sección.</div>
+                    <div className="flex-1 flex flex-col items-center justify-center p-10 text-center opacity-50 h-full">
+                        <span className="material-symbols-outlined text-4xl text-slate-600">task_alt</span>
+                        <span className="text-slate-500 text-sm font-medium">Todo al día. ¡Buen trabajo!</span>
+                    </div>
                 ) : tasks.map(task => (
-                    <div key={task.id} className="p-3 hover:bg-[#243647] transition-colors group cursor-pointer flex items-center gap-3">
-                        {/* Simple status/priority indicator placeholder */}
-                        <div className={`flex flex-col items-center justify-center size-10 rounded-lg ${c.bgIcon} ${c.textIcon} shrink-0 border border-white/5`}>
-                            <span className="material-symbols-outlined text-lg">event</span>
+                    <div key={task.id}
+                        onClick={() => onTaskClick?.(task)}
+                        className="p-4 hover:bg-[#1e293b] transition-colors group/item cursor-pointer flex flex-col gap-2 relative"
+                    >
+                        <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-transparent group-hover/item:bg-indigo-500 transition-colors"></div>
+                        {/* Top Row: Title */}
+                        <div className="pl-2">
+                            <h5 className="text-sm font-bold text-slate-200 group-hover/item:text-white leading-snug">{task.title}</h5>
+                            {task.description && (
+                                <p className="text-xs text-slate-400 line-clamp-2 mt-1 font-medium">{task.description}</p>
+                            )}
                         </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="flex justify-between">
-                                <h5 className="text-sm font-semibold text-white truncate">{task.title}</h5>
-                                {task.reminder_enabled && <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-700 text-gray-300 font-bold whitespace-nowrap ml-2">REMINDER</span>}
-                            </div>
-                            <p className="text-xs text-gray-400 truncate">{task.description || "Sin descripción"}</p>
+
+                        {/* Location Context (Board > Column) */}
+                        <div className="flex items-center flex-wrap gap-2 text-[10px] pl-2 mt-1">
+                            <span className="flex items-center gap-1 text-slate-500">
+                                {task.boardTitle}
+                            </span>
+                            <span className="text-slate-700">/</span>
+                            <span className={`font-semibold ${color === 'red' ? 'text-red-400' : 'text-orange-400'}`}>
+                                {task.columnTitle}
+                            </span>
                         </div>
                     </div>
                 ))}
             </div>
-            <div className="p-2 bg-[#161f29] text-center border-t border-[#344d65]">
-                <button className={`text-xs font-bold ${c.textIcon} hover:underline`}>Ver todas</button>
+
+            <div className="p-3 bg-[#1e293b]/50 text-center border-t border-slate-800 backdrop-blur-sm">
+                <button onClick={onViewAll} className={`text-xs font-bold text-slate-400 ${c.buttonHover} hover:text-white transition-colors flex items-center justify-center gap-1 mx-auto py-1`}>
+                    Ver lista completa <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                </button>
             </div>
         </div>
     );
