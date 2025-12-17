@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './lib/supabaseClient';
 import Sidebar from './components/Sidebar';
 import KanbanBoard from './components/KanbanBoard';
@@ -41,7 +41,9 @@ const AppContent = () => {
   // Global Task Creator State
   const [showGlobalTaskModal, setShowGlobalTaskModal] = useState(false);
 
-  const activeBoard = boards.find(b => b.id == activeBoardId) || boards[0];
+  const activeBoard = useMemo(() =>
+    boards.find(b => b.id == activeBoardId) || boards[0],
+    [boards, activeBoardId]);
 
   // Process voice command when transcript updates and recording finishes
   // Note: Simple implementation - we'll watch for !isRecording and transcript presence

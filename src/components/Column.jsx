@@ -1,34 +1,62 @@
-import React from 'react';
-import { Droppable } from '@hello-pangea/dnd';
+import React, { useMemo } from 'react';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Icons } from './ui/Icons';
 import TaskCard from './TaskCard';
 import { COLOR_MAP } from '../utils/helpers';
 
-const Column = ({ column, tasks, allColumns, onAdd, onTaskClick, onDelete, onUpdateTask, onMoveTask, onUpdateColumn, onEditColumn, onSort, provided, snapshot }) => {
+const Column = ({ column, tasks, onAdd, onTaskClick, onDelete, onUpdateTask, onMoveTask, onUpdateColumn, onEditColumn, onSort, isOverlay }) => {
     const columnTasks = tasks;
-    const isCustomColor = column.color.startsWith('#');
-    const borderColor = isCustomColor ? column.color : (COLOR_MAP[column.color] || '#6366f1');
+    const isCustomColor = column.color?.startsWith('#'); // Safety check on color
+    const borderColor = isCustomColor ? column.color : (COLOR_MAP[column.color || 'indigo'] || '#6366f1');
     const toggleCollapse = () => { onUpdateColumn(column.id, { isCollapsed: !column.isCollapsed }); };
 
-    const transitionClass = snapshot?.isDragging ? '' : 'column-size-transition';
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({
+        id: 'col-' + column.id,
+        data: {
+            type: 'Column',
+            column,
+        },
+        disabled: isOverlay, // Disable drag logic if this is just the visual overlay
+    });
+
+    const style = {
+        transform: CSS.Translate.toString(transform),
+        transition,
+        opacity: isOverlay ? 0.9 : (isDragging ? 0.3 : 1), // Distinct opacity for original vs overlay
+        zIndex: isOverlay ? 999 : 'auto',
+    };
+
+    const taskIds = useMemo(() => tasks.map(t => 'task-' + t.id), [tasks]);
 
     return (
         <div
-            className={`flex-shrink-0 flex flex-col h-full max-h-full ${transitionClass} ${column.isCollapsed ? 'collapsed-column' : 'fixed-width-column'}`}
-            style={{ boxSizing: 'border-box', ...provided.draggableProps.style }}
-            ref={provided.innerRef}
-            {...provided.draggableProps}
+            ref={setNodeRef}
+            style={style}
+            className={`flex-shrink-0 flex flex-col h-full max-h-full ${column.isCollapsed ? 'collapsed-column' : 'fixed-width-column'}`}
+        // We apply attributes/listeners to the HEADER only for drag handle
         >
             {/* COLUMN HEADER */}
             <div
+                // Header acts as drag handle via listeners below, no need for setNodeRef here
                 className={`
                     relative flex flex-col mb-2 rounded-xl transition-all duration-300 group
                     ${column.isCollapsed ? 'bg-[#1e293b] p-2 items-center' : 'bg-[#1e293b] p-4 pb-3 shadow-sm'}
                 `}
                 style={{
                     borderTop: `3px solid ${borderColor}`,
+                    cursor: 'grab',
                 }}
-                {...provided.dragHandleProps}
+                {...attributes}
+                {...listeners}
             >
                 <div className="flex justify-between items-center w-full">
                     {!column.isCollapsed && (
@@ -49,8 +77,9 @@ const Column = ({ column, tasks, allColumns, onAdd, onTaskClick, onDelete, onUpd
                         {!column.isCollapsed && (
                             <>
                                 <button
-                                    onClick={() => onEditColumn(column)}
-                                    className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded-md transition-all opacity-0 group-hover:opacity-100"
+                                    onClick={(e) => { e.stopPropagation(); onEditColumn(column); }}
+                                    className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded-md transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+                                    onPointerDown={e => e.stopPropagation()}
                                     title="Configurar"
                                 >
                                     <Icons.Settings size={14} />
@@ -58,19 +87,21 @@ const Column = ({ column, tasks, allColumns, onAdd, onTaskClick, onDelete, onUpd
 
                                 {(column.default_reminder_enabled || tasks.some(t => t.reminder_enabled)) && (
                                     <button
-                                        onClick={() => onSort(column.id)}
-                                        className={`p-1.5 rounded-md transition-all ${column.cardConfig?.auto_sort || column.card_config?.auto_sort ? '' : 'text-slate-500 hover:text-indigo-400 hover:bg-slate-700 opacity-0 group-hover:opacity-100'}`}
+                                        onClick={(e) => { e.stopPropagation(); onSort(column.id); }}
+                                        className={`p-1.5 rounded-md transition-all cursor-pointer ${column.cardConfig?.auto_sort || column.card_config?.auto_sort ? '' : 'text-slate-500 hover:text-indigo-400 hover:bg-slate-700 opacity-0 group-hover:opacity-100'}`}
                                         style={column.cardConfig?.auto_sort || column.card_config?.auto_sort ? { color: borderColor, backgroundColor: `${borderColor}1A` } : {}}
                                         title={column.cardConfig?.auto_sort || column.card_config?.auto_sort ? "Orden automático activado" : "Activar orden automático"}
+                                        onPointerDown={e => e.stopPropagation()}
                                     >
                                         <Icons.Sort size={14} />
                                     </button>
                                 )}
 
                                 <button
-                                    onClick={() => onAdd(column.title)}
-                                    className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded-md transition-all"
+                                    onClick={(e) => { e.stopPropagation(); onAdd(column.title); }}
+                                    className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded-md transition-all cursor-pointer"
                                     title="Añadir tarea rápida"
+                                    onPointerDown={e => e.stopPropagation()}
                                 >
                                     <Icons.Plus size={14} />
                                 </button>
@@ -78,9 +109,10 @@ const Column = ({ column, tasks, allColumns, onAdd, onTaskClick, onDelete, onUpd
                         )}
 
                         <button
-                            onClick={toggleCollapse}
-                            className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded-md transition-all"
+                            onClick={(e) => { e.stopPropagation(); toggleCollapse(); }}
+                            className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded-md transition-all cursor-pointer"
                             title={column.isCollapsed ? "Desplegar" : "Plegar"}
+                            onPointerDown={e => e.stopPropagation()}
                         >
                             {column.isCollapsed ? <Icons.ChevronDown size={14} /> : <Icons.ChevronUp size={14} />}
                         </button>
@@ -107,46 +139,41 @@ const Column = ({ column, tasks, allColumns, onAdd, onTaskClick, onDelete, onUpd
 
             {/* TASKS AREA */}
             {!column.isCollapsed && (
-                <Droppable droppableId={'col-' + column.id.toString()}>
-                    {(provided, snapshot) => (
-                        <div
-                            {...provided.droppableProps}
-                            ref={provided.innerRef}
-                            className={`
-                                flex-1 overflow-y-auto overflow-x-hidden p-2 flex flex-col gap-3 custom-scrollbar rounded-xl transition-colors duration-200
-                                ${snapshot.isDraggingOver ? 'bg-slate-800/30' : ''}
-                            `}
-                        >
-                            {columnTasks.length === 0 ? (
-                                <div
-                                    className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 hover:bg-slate-800/30 transition-all group/empty"
-                                    onClick={() => onAdd(column.title)}
-                                >
-                                    <div className="text-slate-600 group-hover/empty:text-slate-500 transition-colors mb-2">
-                                        <Icons.Plus size={24} />
-                                    </div>
-                                    <p className="text-xs font-medium text-slate-600 group-hover/empty:text-slate-500">Sin tareas</p>
+                <div
+                    className={`
+                        flex-1 overflow-y-auto overflow-x-hidden p-2 flex flex-col gap-3 custom-scrollbar rounded-xl transition-colors duration-200
+                        ${isDragging ? 'bg-slate-800/30' : ''}
+                    `}
+                    style={{ minHeight: '100px' }} // Ensure droppable area exists even if empty
+                >
+                    <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+                        {columnTasks.length === 0 ? (
+                            <div
+                                className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 hover:bg-slate-800/30 transition-all group/empty"
+                                onClick={() => onAdd(column.title)}
+                            >
+                                <div className="text-slate-600 group-hover/empty:text-slate-500 transition-colors mb-2">
+                                    <Icons.Plus size={24} />
                                 </div>
-                            ) : (
-                                columnTasks.map((task, index) => (
-                                    <TaskCard
-                                        key={task.id}
-                                        task={task}
-                                        index={index}
-                                        onClick={onTaskClick}
-                                        onDelete={onDelete}
-                                        onUpdate={onUpdateTask}
-                                        onMove={onMoveTask}
-                                        color={column.color}
-                                        cardConfig={column.cardConfig}
-                                        columns={allColumns}
-                                    />
-                                ))
-                            )}
-                            {provided.placeholder}
-                        </div>
-                    )}
-                </Droppable>
+                                <p className="text-xs font-medium text-slate-600 group-hover/empty:text-slate-500">Sin tareas</p>
+                            </div>
+                        ) : (
+                            columnTasks.map((task, index) => (
+                                <TaskCard
+                                    key={task.id}
+                                    task={task}
+                                    index={index}
+                                    onClick={onTaskClick}
+                                    onDelete={onDelete}
+                                    onUpdate={onUpdateTask}
+                                    onMove={onMoveTask}
+                                    color={column.color}
+                                    cardConfig={column.cardConfig}
+                                />
+                            ))
+                        )}
+                    </SortableContext>
+                </div>
             )}
         </div >
     );

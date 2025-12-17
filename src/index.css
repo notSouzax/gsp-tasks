@@ -112,7 +112,7 @@ body {
 
 /*
    Custom transition that ONLY affects sizing properties.
-   This is critical to avoid conflicting with @hello-pangea/dnd's 'transform' animations.
+   This is critical to avoid layout shifts during column resize.
 */
 .column-size-transition {
     transition-property: width, min-width, max-width, flex-basis, flex-grow, flex-shrink;
