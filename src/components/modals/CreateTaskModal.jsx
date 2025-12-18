@@ -110,33 +110,37 @@ const CreateTaskModal = ({ columnTitle, initialData, onClose, onSave, boards = [
                             <div className="grid grid-cols-2 gap-4 mb-5">
                                 <div>
                                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Tablero</label>
-                                    <div className="relative flex items-center">
+                                    <div className="relative inline-block w-full">
                                         <select
                                             value={selectedBoardId || ""}
                                             onChange={(e) => setSelectedBoardId(e.target.value)}
-                                            className="w-full bg-[#1e293b] hover:bg-[#253045] border border-slate-700 rounded-lg pl-3 pr-8 py-2.5 text-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none appearance-none transition-all cursor-pointer"
+                                            className="w-full bg-[#1e293b] hover:bg-[#253045] border border-slate-700 rounded-lg pl-3 pr-10 py-2.5 text-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none appearance-none transition-all cursor-pointer"
                                         >
                                             {boards.map(b => (
                                                 <option key={b.id} value={b.id}>{b.title}</option>
                                             ))}
                                         </select>
-                                        <Icons.ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" size={14} />
+                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                            <Icons.ChevronDown className="text-slate-400" size={14} />
+                                        </div>
                                     </div>
                                 </div>
                                 <div>
                                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Columna</label>
-                                    <div className="relative flex items-center">
+                                    <div className="relative inline-block w-full">
                                         <select
                                             value={selectedColumnId || ""}
                                             onChange={(e) => setSelectedColumnId(e.target.value)}
-                                            className="w-full bg-[#1e293b] hover:bg-[#253045] border border-slate-700 rounded-lg pl-3 pr-8 py-2.5 text-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none appearance-none transition-all cursor-pointer disabled:opacity-50"
+                                            className="w-full bg-[#1e293b] hover:bg-[#253045] border border-slate-700 rounded-lg pl-3 pr-10 py-2.5 text-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none appearance-none transition-all cursor-pointer disabled:opacity-50"
                                             disabled={!selectedBoardId}
                                         >
                                             {columnsForSelect.map(c => (
                                                 <option key={c.id} value={c.id}>{c.title}</option>
                                             ))}
                                         </select>
-                                        <Icons.ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" size={14} />
+                                        <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                            <Icons.ChevronDown className="text-slate-400" size={14} />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -168,16 +172,13 @@ const CreateTaskModal = ({ columnTitle, initialData, onClose, onSave, boards = [
                             <>
                                 <div className="mb-5">
                                     <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Comentario Inicial <span className="text-slate-600 normal-case font-normal">(Opcional)</span></label>
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            value={initialComment}
-                                            onChange={(e) => setInitialComment(e.target.value)}
-                                            placeholder="Añadir una nota rápida..."
-                                            className="w-full bg-[#1e293b] border border-slate-700 rounded-lg pl-10 pr-4 py-2.5 text-slate-300 placeholder-slate-600 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none transition-all"
-                                        />
-                                        <Icons.MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-                                    </div>
+                                    <input
+                                        type="text"
+                                        value={initialComment}
+                                        onChange={(e) => setInitialComment(e.target.value)}
+                                        placeholder="Añadir una nota rápida..."
+                                        className="w-full bg-[#1e293b] border border-slate-700 rounded-lg px-4 py-2.5 text-slate-300 placeholder-slate-600 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none transition-all"
+                                    />
                                 </div>
 
                                 {/* Checklist Section */}

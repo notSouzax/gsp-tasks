@@ -98,17 +98,19 @@ const TaskDetailModal = ({ task, columns, onClose, onUpdate, onDelete }) => {
                     <div className="flex-1 mr-4">
                         <div className="flex items-center gap-3 mb-3">
                             {/* Status Badge */}
-                            <div className="relative group/status flex items-center">
+                            <div className="relative inline-block">
                                 {(currentColumn?.cardConfig?.enableOrder) ? (
                                     <>
                                         <select
                                             value={task.status}
                                             onChange={(e) => handleStatusChange(e.target.value)}
-                                            className="appearance-none bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 font-bold text-xs uppercase tracking-wider rounded-lg pl-3 pr-8 py-1.5 outline-none cursor-pointer transition-colors border border-indigo-500/20 hover:border-indigo-500/40 w-full"
+                                            className="appearance-none bg-[#1e293b] hover:bg-[#253045] text-indigo-300 font-bold text-xs uppercase tracking-wider rounded-lg pl-3 pr-10 py-1.5 outline-none cursor-pointer transition-all border border-indigo-500/20 hover:border-indigo-500/40 focus:ring-2 focus:ring-indigo-500/50"
                                         >
                                             {columns.map(c => <option key={c.id} value={c.title}>{c.title}</option>)}
                                         </select>
-                                        <Icons.ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none" />
+                                        <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                                            <Icons.ChevronDown size={14} className="text-indigo-400" />
+                                        </div>
                                     </>
                                 ) : (
                                     <div className="bg-indigo-500/10 text-indigo-300 font-bold text-xs uppercase tracking-wider rounded-lg px-3 py-1.5 border border-indigo-500/20">
@@ -339,15 +341,20 @@ const TaskDetailModal = ({ task, columns, onClose, onUpdate, onDelete }) => {
                                                             placeholder="0"
                                                             className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white focus:ring-1 focus:ring-indigo-500/50 outline-none text-center font-mono"
                                                         />
-                                                        <select
-                                                            value={reminderUnit}
-                                                            onChange={(e) => setReminderUnit(e.target.value)}
-                                                            className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-slate-300 focus:ring-1 focus:ring-indigo-500/50 outline-none"
-                                                        >
-                                                            {TIME_UNITS.map(unit => (
-                                                                <option key={unit.value} value={unit.value}>{unit.label}</option>
-                                                            ))}
-                                                        </select>
+                                                        <div className="relative inline-block flex-1">
+                                                            <select
+                                                                value={reminderUnit}
+                                                                onChange={(e) => setReminderUnit(e.target.value)}
+                                                                className="appearance-none w-full bg-[#1e293b] hover:bg-[#253045] border border-slate-700 rounded-lg pl-3 pr-8 py-1.5 text-xs text-slate-200 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none cursor-pointer transition-all"
+                                                            >
+                                                                {TIME_UNITS.map(unit => (
+                                                                    <option key={unit.value} value={unit.value}>{unit.label}</option>
+                                                                ))}
+                                                            </select>
+                                                            <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none">
+                                                                <Icons.ChevronDown size={12} className="text-slate-400" />
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                     <button
                                                         type="button"

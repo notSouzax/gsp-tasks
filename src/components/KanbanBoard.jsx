@@ -301,7 +301,7 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
             added.forEach(async c => {
                 const { data } = await supabase.from('comments').insert({ task_id: updatedTask.id, user_id: currentUser.id, text: c.text }).select().single();
                 if (data) {
-                    setEditingTask(prev => ({ ...prev, comments: prev.comments.map(cc => cc.id === c.id ? { ...cc, id: data.id } : cc) }));
+                    setEditingTask(prev => prev ? ({ ...prev, comments: (prev.comments || []).map(cc => cc.id === c.id ? { ...cc, id: data.id } : cc) }) : null);
                 }
             });
             const deleted = oldComments.filter(oc => !newComments.some(nc => nc.id === oc.id));
@@ -371,21 +371,11 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         }
     }, []);
 
-    const lastOverTime = useRef(0);
-
     const handleDragOver = useCallback((event) => {
         const { active, over } = event;
         const overId = over?.id;
 
         if (!overId || active.id === overId || activeDragType === 'COLUMN') return;
-
-        // Throttle updates to prevent "Max Depth" crash during rapid scrolling
-        // We only process 'significant' changes or limit frequency
-        const now = Date.now();
-        if (now - lastOverTime.current < 40) { // Limit to ~25fps for heavy updates
-            return;
-        }
-        lastOverTime.current = now;
 
         const activeContainer = findContainer(active.id);
         const overContainer = findContainer(overId);
@@ -396,8 +386,6 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
             const activeItems = prev.find(c => 'col-' + c.id === activeContainer)?.cards || [];
             const overItems = prev.find(c => 'col-' + c.id === overContainer)?.cards || [];
 
-            // Critical Check: If item is already in target (in the PREVIOUS state we are updating from), do nothing.
-            // This prevents the infinite update loop without needing 'columns' as a dependency.
             if (overItems.some(t => 'task-' + t.id === active.id)) {
                 return prev;
             }
@@ -406,6 +394,7 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
             const overIndex = overItems.findIndex(t => 'task-' + t.id === overId);
 
             let newIndex;
+            // ... (Rest of logic is fine)
             if (overId === overContainer) {
                 newIndex = overItems.length + 1;
             } else {
@@ -418,6 +407,7 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
                 const modifier = isBelowOverItem ? 1 : 0;
                 newIndex = overIndex >= 0 ? overIndex + modifier : overItems.length + 1;
             }
+            // ...
 
             return prev.map((c) => {
                 if ('col-' + c.id === activeContainer) {
@@ -425,10 +415,9 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
                 }
                 if ('col-' + c.id === overContainer) {
                     const itemMoved = activeItems[activeIndex];
-                    // Update task status locally
                     const newCards = [
                         ...overItems.slice(0, newIndex),
-                        { ...itemMoved, column_id: c.id, status: c.title }, // Optimistic update
+                        { ...itemMoved, column_id: c.id, status: c.title },
                         ...overItems.slice(newIndex, overItems.length)
                     ];
                     return { ...c, cards: newCards };
@@ -436,7 +425,10 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
                 return c;
             });
         });
-    }, [activeDragType, findContainer]); // Stable dependencies = Stable Handler = Working AutoScroll
+    }, [activeDragType, findContainer]);
+
+
+
 
     const handleDragEnd = useCallback(async (event) => {
         const { active, over } = event;
@@ -542,36 +534,68 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         },
     }), []);
 
-    const autoScrollConfig = useMemo(() => ({
-        layoutShiftCompensation: false,
-        acceleration: (metrics) => {
-            const intensity = metrics.value;
-            if (!intensity) return 0;
 
-            // Speed = Base * Intensity. Capped at 12px/frame.
-            // Using 20 as base gives a nice ramp up, but we clamp it early.
-            const targetSpeed = 20 * intensity;
-            return Math.min(targetSpeed, 12) / intensity;
-        },
-        interval: 10,
-        threshold: {
-            x: 0.2, // RESTORED TO 20% for easier activation on small boards
-            y: 0.2,
-        }
-    }), []);
+    // CUSTOM AUTO-SCROLL: Bypasses dnd-kit's buggy React 18 auto-scroll detection
+    const scrollContainerRef = useRef(null);
+
+    useEffect(() => {
+        if (!activeDragItem || !scrollContainerRef.current) return;
+
+        const container = scrollContainerRef.current;
+        const scrollSpeed = 4; // FIXED: Always 4 pixels per frame (constant speed)
+        const edgeThreshold = 100; // pixels from edge to trigger scroll
+        let animationFrameId = null;
+
+        const handleAutoScroll = (e) => {
+            const rect = container.getBoundingClientRect();
+            const mouseX = e.clientX;
+
+            // Calculate distance from edges
+            const distFromLeft = mouseX - rect.left;
+            const distFromRight = rect.right - mouseX;
+
+            let scrollAmount = 0;
+
+            if (distFromLeft < edgeThreshold) {
+                // Near left edge - scroll left at constant speed
+                scrollAmount = -scrollSpeed;
+            } else if (distFromRight < edgeThreshold) {
+                // Near right edge - scroll right at constant speed
+                scrollAmount = scrollSpeed;
+            }
+
+            if (scrollAmount !== 0) {
+                container.scrollLeft += scrollAmount;
+            }
+
+            animationFrameId = requestAnimationFrame(() => handleAutoScroll(e));
+        };
+
+        const onMouseMove = (e) => {
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            handleAutoScroll(e);
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+
+        return () => {
+            document.removeEventListener('mousemove', onMouseMove);
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        };
+    }, [activeDragItem]);
 
     return (
         <DndContext
             sensors={sensors}
             collisionDetection={closestCenter}
-            // CRITICAL: Force re-measuring to ensure reliable detection of scroll containers and droppables
             measuring={measuringConfig}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
-            autoScroll={autoScrollConfig}
+            autoScroll={false}  // DISABLED: Using custom implementation above
         >
             <div
+                ref={scrollContainerRef}
                 className="flex-1 overflow-x-auto overflow-y-hidden"
             >
                 <div className="h-full flex p-6 gap-6" style={{ minWidth: 'max-content' }}>

@@ -1,21 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Icons } from './ui/Icons';
 import { formatDate, isReminderActive, Linkify, COLOR_MAP } from '../utils/helpers';
 
-const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, cardConfig, isOverlay }) => {
+const TaskCard = ({ task, onClick, onDelete, onUpdate, onMove, color, cardConfig, isOverlay }) => {
     const commentCount = task.comments ? task.comments.length : 0;
     const lastComment = commentCount > 0 ? task.comments[task.comments.length - 1] : null;
 
     // Force re-render when reminder is due
-    const [_, setTick] = React.useState(0);
+    const [, forceUpdate] = React.useState(0);
     React.useEffect(() => {
         if (!task.next_notification_at) return;
         const now = Date.now();
         const timeUntilDue = new Date(task.next_notification_at).getTime() - now;
         if (timeUntilDue > 0) {
-            const timer = setTimeout(() => setTick(t => t + 1), timeUntilDue);
+            const timer = setTimeout(() => forceUpdate(t => t + 1), timeUntilDue);
             return () => clearTimeout(timer);
         }
     }, [task.next_notification_at]);
@@ -25,6 +25,24 @@ const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, car
         enableMove: cardConfig?.enableMove ?? false,
         enableOrder: cardConfig?.enableOrder ?? false,
         enableTextOnly: cardConfig?.enableTextOnly ?? false
+    };
+
+    // Quick comment state
+    const [showQuickComment, setShowQuickComment] = useState(false);
+    const [quickCommentText, setQuickCommentText] = useState('');
+
+    const handleQuickComment = (e) => {
+        e.stopPropagation();
+        if (quickCommentText.trim()) {
+            const newComment = {
+                id: `temp-${Date.now()}`,
+                text: quickCommentText.trim(),
+                created_at: new Date().toISOString()
+            };
+            onUpdate({ ...task, comments: [...(task.comments || []), newComment] });
+            setQuickCommentText('');
+            setShowQuickComment(false);
+        }
     };
 
     const DEFAULT_ORDER_OPTIONS = [
@@ -79,7 +97,7 @@ const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, car
             // Specific style for border
             >
                 <div style={{ borderLeft: `4px solid ${borderColor}` }} className="p-3">
-                    <div className="pr-6 cursor-pointer" onClick={() => { if (!isDragging) onClick(task); }}>
+                    <div className="pr-6">
                         <h3 className="font-medium text-slate-200 text-sm leading-snug select-text w-fit">{task.title}</h3>
                         {task.description && <p className="text-slate-500 text-xs mt-1 truncate select-text w-fit">{task.description}</p>}
                     </div>
@@ -117,7 +135,7 @@ const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, car
             {/* Color Stripe Top */}
             <div className="h-1 w-full shrink-0" style={{ backgroundColor: borderColor }}></div>
 
-            <div className="px-4 pb-4 pt-2 flex flex-col gap-3 cursor-pointer" onClick={() => { if (!isDragging && !isOverlay) onClick(task); }}>
+            <div className="px-4 pb-4 pt-2 flex flex-col gap-3">
 
                 {/* Title Row */}
                 <div className="flex justify-between items-start gap-3">
@@ -197,14 +215,49 @@ const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, car
                         style={{ backgroundColor: `${borderColor}10`, border: `1px solid ${borderColor}20` }}
                     >
                         <div className="flex justify-between items-center mb-1 bg-transparent">
-                            <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: borderColor }}>
-                                ÚLTIMO COMENTARIO
-                            </span>
+                            <div className="flex items-center gap-1">
+                                <span className="text-[10px] font-bold uppercase tracking-wider leading-none" style={{ color: borderColor }}>
+                                    ÚLTIMO COMENTARIO
+                                </span>
+                                {!isOverlay && (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); setShowQuickComment(!showQuickComment); }}
+                                        onPointerDown={(e) => e.stopPropagation()}
+                                        className="opacity-0 group-hover:opacity-100 transition-all rounded hover:bg-white/10 flex items-center justify-center"
+                                        style={{ color: borderColor }}
+                                        title="Añadir comentario"
+                                    >
+                                        <Icons.MessageSquarePlus size={12} />
+                                    </button>
+                                )}
+                            </div>
                             <span className="text-[10px] opacity-60" style={{ color: borderColor }}>
                                 {formatTimeShort(lastComment.createdAt || lastComment.created_at)}
                             </span>
                         </div>
                         <p className="text-slate-300 leading-snug line-clamp-2 italic select-text w-fit">"{lastComment.text}"</p>
+
+                        {/* Quick Comment Input */}
+                        {showQuickComment && (
+                            <div className="mt-2 flex gap-1.5" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
+                                <input
+                                    type="text"
+                                    value={quickCommentText}
+                                    onChange={(e) => setQuickCommentText(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') handleQuickComment(e); if (e.key === 'Escape') setShowQuickComment(false); }}
+                                    placeholder="Escribe..."
+                                    autoFocus
+                                    className="flex-1 bg-slate-800/80 border border-slate-600 rounded px-2 py-1 text-xs text-white placeholder-slate-500 outline-none focus:border-slate-500"
+                                />
+                                <button
+                                    onClick={handleQuickComment}
+                                    className="px-2 py-1 rounded text-[10px] font-bold transition-colors"
+                                    style={{ backgroundColor: borderColor, color: 'white' }}
+                                >
+                                    <Icons.Send size={10} />
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -240,21 +293,23 @@ const TaskCard = ({ task, index, onClick, onDelete, onUpdate, onMove, color, car
                     {/* Actions Dropdowns */}
                     <div className="flex items-center gap-2" onClick={e => e.stopPropagation()} onPointerDown={e => e.stopPropagation()}>
                         {config.enableOrder && !isOverlay && (
-                            <div className="relative group/select flex items-center">
+                            <div className="relative inline-block">
                                 <select
                                     value={task.sortOptionId || ""}
                                     onChange={(e) => {
                                         const opt = ORDER_OPTIONS.find(o => o.id === e.target.value);
                                         if (opt) onMove(task, opt.action, opt.id);
                                     }}
-                                    className="appearance-none bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-md py-1 pl-2 pr-6 text-[10px] text-slate-300 focus:text-white outline-none cursor-pointer transition-colors"
+                                    className="appearance-none bg-[#1e293b] hover:bg-[#253045] border border-slate-700 rounded-lg py-1.5 pl-2.5 pr-8 text-[10px] text-slate-300 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none cursor-pointer transition-all"
                                 >
                                     <option value="" disabled>Estado</option>
                                     {ORDER_OPTIONS.map(opt => (
                                         <option key={opt.id} value={opt.id}>{opt.label}</option>
                                     ))}
                                 </select>
-                                <Icons.ChevronDown size={10} className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+                                    <Icons.ChevronDown size={10} className="text-slate-400" />
+                                </div>
                             </div>
                         )}
                     </div>

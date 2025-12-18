@@ -14,6 +14,7 @@ import ProfileModal from './components/modals/ProfileModal';
 import LoginModal from './components/modals/LoginModal';
 import BoardSettingsModal from './components/modals/BoardSettingsModal';
 import ConfirmationModal from './components/modals/ConfirmationModal';
+import SearchModal from './components/modals/SearchModal';
 
 import Dashboard from './components/Dashboard';
 
@@ -32,7 +33,7 @@ const AppContent = () => {
   const [pendingTaskId, setPendingTaskId] = useState(null);
 
   // View State
-  const [activeView, setActiveView] = useState('board'); // 'board' | 'dashboard'
+  const [activeView, setActiveView] = useState('dashboard'); // 'board' | 'dashboard'
 
   // Voice Input Logic
   const { isRecording, transcript, startRecording, stopRecording, resetTranscript, isSupported } = useVoiceInput();
@@ -40,6 +41,7 @@ const AppContent = () => {
 
   // Global Task Creator State
   const [showGlobalTaskModal, setShowGlobalTaskModal] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
 
   const activeBoard = useMemo(() =>
     boards.find(b => b.id == activeBoardId) || boards[0],
@@ -94,21 +96,20 @@ const AppContent = () => {
     }
   }, [activeBoard, boards, resetTranscript]);
 
-  const finalizeVoiceTask = async (confirmedData) => {
-    if (!pendingVoiceTask) return;
-    const { targetBoard, targetColumn } = pendingVoiceTask;
-    const { title, description, initialComment, checklist } = confirmedData;
+  // SHARED HELPER: Creates a task in a specific board/column (used by voice and global modal)
+  const createTaskInColumn = useCallback(async (targetBoard, targetColumn, taskData) => {
+    const { title, description, initialComment, checklist } = taskData;
 
-    // Logic adapted from original handleVoiceCommand but using confirmed data
+    // Build the new task object
     const newTask = {
       id: Date.now(),
       title,
       description: description || "",
-      createdAt: new Date().toISOString(), // FIXED: Use ISO string for UI compatibility
+      createdAt: new Date().toISOString(),
       comments: initialComment ? [{
         id: Date.now(),
         text: initialComment,
-        createdAt: new Date().toISOString() // FIXED: Use ISO string for UI compatibility
+        createdAt: new Date().toISOString()
       }] : [],
       reminder_enabled: false,
       reminder_value: null,
@@ -117,12 +118,15 @@ const AppContent = () => {
       checklist: checklist || []
     };
 
-    // Apply defaults
+    // Apply column defaults
     if (targetColumn.default_reminder_enabled) {
-      newTask.next_notification_at = calculateNextNotification(targetColumn.default_reminder_value, targetColumn.default_reminder_unit);
+      newTask.next_notification_at = calculateNextNotification(
+        targetColumn.default_reminder_value,
+        targetColumn.default_reminder_unit
+      );
     }
 
-    // Update State
+    // Update local state
     setBoards(prevBoards => prevBoards.map(b => {
       if (b.id === targetBoard.id) {
         const newColumns = b.columns.map(col => {
@@ -136,31 +140,40 @@ const AppContent = () => {
       return b;
     }));
 
-    // Persist Task (and Comment) - simplified version of handleSaveTask
-    // 1. Insert Task
+    // Persist to Supabase
     const { data: insertedTask, error } = await supabase.from('tasks').insert([{
       column_id: targetColumn.id,
       title: newTask.title,
       description: newTask.description,
-
       position: (targetColumn.cards || []).length,
-      next_notification_at: newTask.next_notification_at ? new Date(newTask.next_notification_at).toISOString() : null,
+      next_notification_at: newTask.next_notification_at
+        ? new Date(newTask.next_notification_at).toISOString()
+        : null,
       checklist: newTask.checklist
     }]).select().single();
 
-    if (!error && initialComment) {
+    // Add comment if provided
+    if (!error && initialComment && insertedTask) {
       await supabase.from('comments').insert([{
         task_id: insertedTask.id,
-        user_id: currentUser.id,
+        user_id: currentUser?.id,
         text: initialComment
       }]);
     }
 
-    // Switch board if needed
+    // Switch board if different from active
     if (targetBoard.id !== activeBoardId) {
       setActiveBoardId(targetBoard.id);
     }
 
+    return insertedTask;
+  }, [currentUser, activeBoardId]);
+
+  const finalizeVoiceTask = async (confirmedData) => {
+    if (!pendingVoiceTask) return;
+    const { targetBoard, targetColumn } = pendingVoiceTask;
+
+    await createTaskInColumn(targetBoard, targetColumn, confirmedData);
     setPendingVoiceTask(null);
   };
 
@@ -238,6 +251,7 @@ const AppContent = () => {
           )
         `)
         .eq('user_id', currentUser.id)
+        .order('order', { ascending: true, nullsFirst: false })
         .order('created_at', { ascending: true });
 
       if (error) {
@@ -305,7 +319,6 @@ const AppContent = () => {
   // Apply Board-Specific Settings (Column Width)
   useEffect(() => {
     if (!activeBoard) return;
-    if (!activeBoard) return;
     const widthToApply = activeBoard.columnWidth || activeBoard.column_width || settings.columnWidth || 365;
     document.documentElement.style.setProperty('--column-width', `${widthToApply}px`);
   }, [activeBoard, settings.columnWidth]);
@@ -321,22 +334,39 @@ const AppContent = () => {
 
 
   const handleUpdateBoardSettings = async (boardId, updates) => {
-    // Optimistic update
+    // Optimistic update - use UI field names
     setBoards(boards.map(b => b.id === boardId ? { ...b, ...updates } : b));
 
-    // DB update
+    // DB update - map UI field names to DB field names
+    const dbUpdates = { ...updates };
+    if (dbUpdates.columnWidth !== undefined) {
+      dbUpdates.column_width = dbUpdates.columnWidth;
+      delete dbUpdates.columnWidth;
+    }
+
     const { error } = await supabase
       .from('boards')
-      .update(updates)
+      .update(dbUpdates)
       .eq('id', boardId);
 
     if (error) {
       console.error("Error updating board:", error);
-      // Revert?
     }
   };
 
   const handleEditBoard = handleUpdateBoardSettings; // Alias
+
+  // Handle board reordering from drag and drop
+  const handleReorderBoards = async (reorderedBoards) => {
+    // Optimistic update with new order
+    const boardsWithOrder = reorderedBoards.map((b, idx) => ({ ...b, order: idx }));
+    setBoards(boardsWithOrder);
+
+    // Persist to DB - update order for each board
+    for (const [idx, board] of reorderedBoards.entries()) {
+      await supabase.from('boards').update({ order: idx }).eq('id', board.id);
+    }
+  };
 
   const handleDeleteBoard = (boardId) => {
     if (boards.length === 1) { alert("No puedes eliminar el último tablero."); return; }
@@ -405,9 +435,7 @@ const AppContent = () => {
 
 
   const handleGlobalTaskSave = async (taskData) => {
-    // Re-use logic from finalizeVoiceTask - they are essentially the same:
-    // constructing a task and inserting it into a potentially different board/column.
-    const { targetBoardId, targetColumnId, title, description, initialComment, checklist } = taskData;
+    const { targetBoardId, targetColumnId } = taskData;
 
     const targetBoard = boards.find(b => b.id == targetBoardId);
     const targetColumn = targetBoard?.columns.find(c => c.id == targetColumnId);
@@ -417,64 +445,7 @@ const AppContent = () => {
       return;
     }
 
-    // We can refactor finalizeVoiceTask to be more generic, or just call the core logic here.
-    // Let's copy the core logic to avoid complex refactoring of the voice flow state.
-
-    const newTask = {
-      id: Date.now(),
-      title,
-      description: description || "",
-      createdAt: new Date().toISOString(),
-      comments: initialComment ? [{ id: Date.now(), text: initialComment, createdAt: new Date().toISOString() }] : [],
-      reminder_enabled: false,
-      reminder_value: null,
-      reminder_unit: 'minutes',
-      next_notification_at: null,
-      checklist: checklist || []
-    };
-
-    // Apply defaults
-    if (targetColumn.default_reminder_enabled) {
-      newTask.next_notification_at = calculateNextNotification(targetColumn.default_reminder_value, targetColumn.default_reminder_unit);
-    }
-
-    // Update State
-    setBoards(prevBoards => prevBoards.map(b => {
-      if (b.id === targetBoard.id) {
-        const newColumns = b.columns.map(col => {
-          if (col.id === targetColumn.id) {
-            return { ...col, cards: [...(col.cards || []), newTask] };
-          }
-          return col;
-        });
-        return { ...b, columns: newColumns };
-      }
-      return b;
-    }));
-
-    // Persist Task
-    const { data: insertedTask, error } = await supabase.from('tasks').insert([{
-      column_id: targetColumn.id,
-      title: newTask.title,
-      description: newTask.description,
-
-      position: (targetColumn.cards || []).length,
-      next_notification_at: newTask.next_notification_at ? new Date(newTask.next_notification_at).toISOString() : null,
-      checklist: newTask.checklist
-    }]).select().single();
-
-    if (!error && initialComment) {
-      await supabase.from('comments').insert([{
-        task_id: insertedTask.id,
-        user_id: currentUser.id,
-        text: initialComment
-      }]);
-    }
-
-    // Switch board if different
-    if (targetBoard.id !== activeBoardId) {
-      setActiveBoardId(targetBoard.id);
-    }
+    await createTaskInColumn(targetBoard, targetColumn, taskData);
   };
 
   const handleNavigateToTask = (task) => {
@@ -495,6 +466,7 @@ const AppContent = () => {
         onCreateBoard={handleCreateBoard}
         onEditBoard={handleEditBoard}
         onDeleteBoard={handleDeleteBoard}
+        onReorderBoards={handleReorderBoards}
         activeView={activeView}
         onSwitchView={setActiveView}
       />
@@ -537,7 +509,7 @@ const AppContent = () => {
                 {isRecording ? <Icons.MicOff /> : <Icons.Mic />}
               </button>
             )}
-            <button className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors"><Icons.Search /></button>
+            <button onClick={() => setShowSearch(true)} className="w-9 h-9 flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors" title="Buscar tareas"><Icons.Search /></button>
             <div className="h-6 w-px bg-slate-700/50 mx-1" />
             <div
               className="flex items-center gap-3 pl-2 cursor-pointer group"
@@ -547,9 +519,17 @@ const AppContent = () => {
                 <div className="text-sm font-medium text-slate-200 group-hover:text-white transition-colors">{currentUser?.name || 'Usuario'}</div>
                 <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">{currentUser?.role || 'Invitado'}</div>
               </div>
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20 ring-2 ring-transparent group-hover:ring-indigo-500/50 transition-all">
-                {currentUser?.name?.charAt(0) || 'U'}
-              </div>
+              {currentUser?.avatar_url ? (
+                <img
+                  src={currentUser.avatar_url}
+                  alt="Avatar"
+                  className="w-9 h-9 rounded-lg object-cover shadow-lg shadow-indigo-500/20 ring-2 ring-transparent group-hover:ring-indigo-500/50 transition-all"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold shadow-lg shadow-indigo-500/20 ring-2 ring-transparent group-hover:ring-indigo-500/50 transition-all">
+                  {currentUser?.name?.charAt(0) || 'U'}
+                </div>
+              )}
             </div>
           </div>
         </header>
@@ -604,6 +584,13 @@ const AppContent = () => {
           onSave={handleGlobalTaskSave}
         />
       )}
+      {/* SEARCH MODAL */}
+      <SearchModal
+        isOpen={showSearch}
+        onClose={() => setShowSearch(false)}
+        boards={boards}
+        onTaskClick={handleNavigateToTask}
+      />
     </div>
   );
 };

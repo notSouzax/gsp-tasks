@@ -167,13 +167,15 @@ const ColumnModal = ({ column, isCreating, onClose, onUpdate, onDelete }) => {
                                                     {(cardConfig.orderOptions || []).map((opt, idx) => (
                                                         <div key={opt.id || idx} className="flex gap-2 items-center bg-slate-900/50 p-1.5 rounded border border-slate-700/50 group">
                                                             <input type="text" value={opt.label} onChange={(e) => updateOrderOption(opt.id, 'label', e.target.value)} className="flex-1 bg-transparent text-xs text-slate-200 outline-none border-b border-transparent focus:border-indigo-500/50 px-1 placeholder-slate-600" placeholder="Nombre..." />
-                                                            <div className="relative flex items-center">
-                                                                <select value={opt.action} onChange={(e) => updateOrderOption(opt.id, 'action', e.target.value)} className="appearance-none bg-slate-800 text-[10px] text-slate-400 border border-slate-700 rounded px-2 pl-2 pr-6 py-0.5 outline-none max-w-[120px] transition-colors hover:bg-slate-700 hover:text-slate-300">
+                                                            <div className="relative inline-block">
+                                                                <select value={opt.action} onChange={(e) => updateOrderOption(opt.id, 'action', e.target.value)} className="appearance-none bg-[#1e293b] hover:bg-[#253045] text-[10px] text-slate-300 border border-slate-700 rounded-lg pl-2 pr-7 py-1 outline-none max-w-[110px] transition-all cursor-pointer focus:ring-1 focus:ring-indigo-500/50">
                                                                     <option value="none">Etiqueta</option>
                                                                     <option value="move-start">Inicio</option>
                                                                     <option value="move-end">Fin</option>
                                                                 </select>
-                                                                <Icons.ChevronDown size={10} className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                                                <div className="absolute inset-y-0 right-0 flex items-center pr-1.5 pointer-events-none">
+                                                                    <Icons.ChevronDown size={10} className="text-slate-400" />
+                                                                </div>
                                                             </div>
                                                             <button type="button" onClick={() => removeOrderOption(opt.id)} className="text-slate-600 hover:text-red-400 p-1 opacity-0 group-hover:opacity-100 transition-opacity"><Icons.X size={12} /></button>
                                                         </div>
@@ -245,17 +247,19 @@ const ColumnModal = ({ column, isCreating, onClose, onUpdate, onDelete }) => {
                                             placeholder="0"
                                             className="w-16 bg-[#0f172a] border border-slate-700 rounded-lg px-2 py-1.5 text-sm text-white focus:ring-1 focus:ring-indigo-500 outline-none text-center"
                                         />
-                                        <div className="relative flex items-center flex-1">
+                                        <div className="relative inline-block flex-1">
                                             <select
                                                 value={defaultReminderUnit}
                                                 onChange={(e) => setDefaultReminderUnit(e.target.value)}
-                                                className="appearance-none w-full bg-[#0f172a] border border-slate-700 rounded-lg pl-3 pr-8 py-1.5 text-xs text-white focus:ring-1 focus:ring-indigo-500 outline-none transition-colors"
+                                                className="appearance-none w-full bg-[#0f172a] border border-slate-700 rounded-lg pl-3 pr-8 py-1.5 text-xs text-white focus:ring-1 focus:ring-indigo-500 outline-none transition-colors cursor-pointer hover:bg-[#1e293b]"
                                             >
                                                 {TIME_UNITS.map(unit => (
                                                     <option key={unit.value} value={unit.value}>{unit.label}</option>
                                                 ))}
                                             </select>
-                                            <Icons.ChevronDown size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                                            <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none">
+                                                <Icons.ChevronDown size={12} className="text-slate-400" />
+                                            </div>
                                         </div>
                                         <button
                                             type="button"

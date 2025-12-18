@@ -35,11 +35,6 @@ export const SettingsProvider = ({ children }) => {
         const saved = localStorage.getItem(`kanban-settings-${currentUser.id}`);
         if (saved) {
             const parsed = JSON.parse(saved);
-            // Migration: Force 365px if not 365px (resetting all users to new standard)
-            if (parsed.columnWidth !== 365) {
-                parsed.columnWidth = 365;
-                localStorage.setItem(`kanban-settings-${currentUser.id}`, JSON.stringify(parsed));
-            }
             setSettings(parsed);
         } else {
             // Reset to defaults if no settings found for this user

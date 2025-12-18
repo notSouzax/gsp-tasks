@@ -187,7 +187,7 @@ const Dashboard = ({ boards, onNavigateToTask }) => {
                             </div>
 
                             {/* Board Selector for Chart Analysis */}
-                            <div className="relative">
+                            <div className="relative inline-block">
                                 <select
                                     value={chartBoardId}
                                     onChange={(e) => setChartBoardId(e.target.value)}
@@ -197,7 +197,9 @@ const Dashboard = ({ boards, onNavigateToTask }) => {
                                         <option key={board.id} value={board.id}>{board.title}</option>
                                     ))}
                                 </select>
-                                <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none text-[18px]">expand_more</span>
+                                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                    <span className="material-symbols-outlined text-slate-400 text-[16px]">expand_more</span>
+                                </div>
                             </div>
                         </div>
 

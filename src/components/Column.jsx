@@ -111,28 +111,30 @@ const Column = ({ column, tasks, onAdd, onTaskClick, onDelete, onUpdateTask, onM
                         <button
                             onClick={(e) => { e.stopPropagation(); toggleCollapse(); }}
                             className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded-md transition-all cursor-pointer"
-                            title={column.isCollapsed ? "Desplegar" : "Plegar"}
+                            title={column.isCollapsed ? "Expandir columna" : "Minimizar columna"}
                             onPointerDown={e => e.stopPropagation()}
                         >
-                            {column.isCollapsed ? <Icons.ChevronDown size={14} /> : <Icons.ChevronUp size={14} />}
+                            {column.isCollapsed ? <Icons.ChevronRight size={14} /> : <Icons.ChevronUp size={14} />}
                         </button>
                     </div>
                 </div>
 
                 {column.isCollapsed && (
-                    <div className="mt-8 flex items-center justify-center flex-1">
-                        <span
-                            className="writing-vertical font-bold text-xs uppercase tracking-widest text-slate-400 whitespace-nowrap"
-                            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-                        >
-                            {column.title}
-                        </span>
+                    <div className="flex flex-col items-center justify-center gap-3 py-2">
+                        {/* Count Badge on top */}
                         <div
-                            className="mt-4 flex items-center justify-center w-6 h-6 rounded-md text-[10px] font-bold text-white shadow-sm"
+                            className="flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold text-white shadow-md"
                             style={{ backgroundColor: borderColor }}
                         >
                             {columnTasks.length}
                         </div>
+                        {/* Vertical Title */}
+                        <span
+                            className="font-bold text-xs uppercase tracking-widest text-slate-400 whitespace-nowrap"
+                            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+                        >
+                            {column.title}
+                        </span>
                     </div>
                 )}
             </div>
@@ -158,11 +160,10 @@ const Column = ({ column, tasks, onAdd, onTaskClick, onDelete, onUpdateTask, onM
                                 <p className="text-xs font-medium text-slate-600 group-hover/empty:text-slate-500">Sin tareas</p>
                             </div>
                         ) : (
-                            columnTasks.map((task, index) => (
+                            columnTasks.map((task) => (
                                 <TaskCard
                                     key={task.id}
                                     task={task}
-                                    index={index}
                                     onClick={onTaskClick}
                                     onDelete={onDelete}
                                     onUpdate={onUpdateTask}

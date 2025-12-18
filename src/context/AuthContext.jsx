@@ -89,7 +89,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const login = async (email, password) => {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { error } = await supabase.auth.signInWithPassword({
             email,
             password
         });
@@ -102,7 +102,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const register = async (email, password, name) => {
-        const { data, error } = await supabase.auth.signUp({
+        const { error } = await supabase.auth.signUp({
             email,
             password,
             options: {
@@ -116,20 +116,36 @@ export const AuthProvider = ({ children }) => {
         return { success: true };
     };
 
-    // Legacy support / Adapter methods
+    // Update user profile in database
     const updateUser = async (userId, updates) => {
-        // In a real app we would update the 'profiles' table here
-        console.log("Update user not fully implemented for DB yet", updates);
+        try {
+            // Map common field names to DB column names
+            const dbUpdates = {};
+            if (updates.name !== undefined) dbUpdates.full_name = updates.name;
+            if (updates.full_name !== undefined) dbUpdates.full_name = updates.full_name;
+            if (updates.avatar_url !== undefined) dbUpdates.avatar_url = updates.avatar_url;
+            if (updates.role !== undefined) dbUpdates.role = updates.role;
+
+            const { error } = await supabase
+                .from('profiles')
+                .update(dbUpdates)
+                .eq('id', userId);
+
+            if (error) {
+                console.error('Error updating profile:', error);
+                return { success: false, message: error.message };
+            }
+
+            // Update local state
+            setCurrentUser(prev => ({ ...prev, ...updates }));
+            return { success: true };
+        } catch (err) {
+            console.error('Error updating profile:', err);
+            return { success: false, message: err.message };
+        }
     };
 
     const isAdmin = currentUser?.role === 'admin';
-
-    // Helper for debugging
-    const inviteUser = (email) => {
-        // Supabase built-in invite logic would go here
-        console.log("Invite not implemented yet", email);
-        return "mock-token";
-    };
 
     return (
         <AuthContext.Provider value={{
@@ -139,8 +155,7 @@ export const AuthProvider = ({ children }) => {
             logout,
             register,
             isAdmin,
-            updateUser, // kept for compatibility
-            inviteUser  // kept for compatibility
+            updateUser
         }}>
             {loading ? <div className="p-10 text-center text-white">Iniciando sesión...</div> : children}
         </AuthContext.Provider>
