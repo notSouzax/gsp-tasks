@@ -1,0 +1,9 @@
+// CRM Hooks - Modular exports
+export { useContacts } from './useContacts';
+export { useCompanies } from './useCompanies';
+export { useOpportunities } from './useOpportunities';
+export { useActivities } from './useActivities';
+export { usePipelines } from './usePipelines';
+export { useCRMRealtime } from './useCRMRealtime';
+export { useCRMStats } from './useCRMStats';
+export { useCRMNotes } from './useCRMNotes';

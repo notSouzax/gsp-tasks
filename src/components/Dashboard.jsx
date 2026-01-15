@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { isSameDay, parseISO, isBefore, subDays, format } from 'date-fns';
 import DashboardListModal from './modals/DashboardListModal';
@@ -19,6 +19,17 @@ const Dashboard = ({ boards, onNavigateToTask }) => {
     const [activeModal, setActiveModal] = useState(null);
     // Default to the first board if available
     const [chartBoardId, setChartBoardId] = useState(boards?.[0]?.id || '');
+
+    // Real-time tick: forces re-evaluation of time-based calculations every 60 seconds
+    const [tick, setTick] = useState(0);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setTick(t => t + 1);
+        }, 5000); // Every 5 seconds
+
+        return () => clearInterval(interval);
+    }, []);
 
     // Sync chartBoardId if boards change and current selection is invalid
     React.useEffect(() => {
@@ -59,7 +70,8 @@ const Dashboard = ({ boards, onNavigateToTask }) => {
             const date = safeParseDate(t.next_notification_at);
             return isBefore(date, now); // Strictly before now (includes earlier today)
         }).sort((a, b) => safeParseDate(b.next_notification_at) - safeParseDate(a.next_notification_at));
-    }, [allTasks]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [allTasks, tick]); // tick forces re-evaluation every 60 seconds
 
     const dueTodayTasks = useMemo(() => {
         const now = new Date();
@@ -69,7 +81,8 @@ const Dashboard = ({ boards, onNavigateToTask }) => {
             // It is today AND it hasn't passed yet
             return isSameDay(date, now) && !isBefore(date, now);
         }).sort((a, b) => safeParseDate(a.next_notification_at) - safeParseDate(b.next_notification_at));
-    }, [allTasks]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [allTasks, tick]); // tick forces re-evaluation every 60 seconds
 
     const stats = useMemo(() => {
         // Reuse the logic from overdueTasks/dueTodayTasks to ensure consistency
@@ -160,8 +173,8 @@ const Dashboard = ({ boards, onNavigateToTask }) => {
                         Let's keep a summary or greeting here, or just the stats.
                     */}
                     <div className="flex flex-col gap-0.5 pb-2">
-                        <h1 className="text-2xl font-bold text-white tracking-tight">Resumen de Actividad</h1>
-                        <p className="text-slate-400 text-xs">Visión general de tu productividad y tareas pendientes.</p>
+                        <h1 className="text-2xl font-bold text-[var(--text-primary)] tracking-tight">Resumen de Actividad</h1>
+                        <p className="text-[var(--text-secondary)] text-xs">Visión general de tu productividad y tareas pendientes.</p>
                     </div>
 
                     {/* Stats Grid */}
@@ -173,17 +186,54 @@ const Dashboard = ({ boards, onNavigateToTask }) => {
                         <StatCard icon="water_drop" color="blue" label="Eficiencia" value={`${stats.efficiency}%`} />
                     </div>
 
+                    {/* Task Lists Grid - MOVED UP */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {/* Overdue */}
+                        <TaskListCard
+                            title="Tareas Vencidas"
+                            count={overdueTasks.length}
+                            icon="priority_high"
+                            color="red"
+                            tasks={overdueTasks.slice(0, 5)}
+                            onTaskClick={onNavigateToTask}
+                            onViewAll={() => setActiveModal({
+                                type: 'overdue',
+                                title: 'Tareas Vencidas',
+                                tasks: overdueTasks,
+                                color: 'red',
+                                icon: 'priority_high'
+                            })}
+                        />
+
+                        {/* Due Today */}
+                        <TaskListCard
+                            title="Vencen Hoy"
+                            count={dueTodayTasks.length}
+                            icon="today"
+                            color="orange"
+                            tasks={dueTodayTasks.slice(0, 5)}
+                            onTaskClick={onNavigateToTask}
+                            onViewAll={() => setActiveModal({
+                                type: 'dueToday',
+                                title: 'Vencen Hoy',
+                                tasks: dueTodayTasks,
+                                color: 'orange',
+                                icon: 'today'
+                            })}
+                        />
+                    </div>
+
                     {/* Chart Section */}
-                    <div className="w-full bg-[#0f172a] rounded-xl border border-slate-700/50 shadow-xl p-4 relative overflow-hidden group">
+                    <div className="w-full bg-[var(--bg-secondary)] dark:bg-[#0f172a] rounded-xl border border-[var(--border-default)] dark:border-slate-700/50 shadow-[var(--shadow-xl)] p-4 relative overflow-hidden group">
                         <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
 
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4 relative z-10">
                             <div>
-                                <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
                                     <span className="material-symbols-outlined text-indigo-400">bar_chart</span>
                                     Progreso por Columnas
                                 </h3>
-                                <p className="text-xs text-slate-400 mt-1">Distribución de tareas por estado en el tiempo.</p>
+                                <p className="text-xs text-[var(--text-secondary)] mt-1">Distribución de tareas por estado en el tiempo.</p>
                             </div>
 
                             {/* Board Selector for Chart Analysis */}
@@ -191,14 +241,14 @@ const Dashboard = ({ boards, onNavigateToTask }) => {
                                 <select
                                     value={chartBoardId}
                                     onChange={(e) => setChartBoardId(e.target.value)}
-                                    className="appearance-none bg-[#1e293b] border border-slate-700/50 text-slate-200 text-xs font-semibold rounded-lg pl-4 pr-10 py-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all cursor-pointer shadow-lg shadow-black/20 hover:bg-[#253045]"
+                                    className="appearance-none bg-[var(--bg-elevated)] dark:bg-[#1e293b] border border-[var(--border-default)] dark:border-slate-700/50 text-[var(--text-primary)] dark:text-slate-200 text-xs font-semibold rounded-lg pl-4 pr-10 py-2 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 transition-all cursor-pointer shadow-[var(--shadow-md)] hover:bg-stone-50 dark:hover:bg-[#253045]"
                                 >
                                     {boards.map(board => (
                                         <option key={board.id} value={board.id}>{board.title}</option>
                                     ))}
                                 </select>
                                 <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                                    <span className="material-symbols-outlined text-slate-400 text-[16px]">expand_more</span>
+                                    <span className="material-symbols-outlined text-[var(--text-muted)] text-[16px]">expand_more</span>
                                 </div>
                             </div>
                         </div>
@@ -234,47 +284,10 @@ const Dashboard = ({ boards, onNavigateToTask }) => {
                             {chartKeys.map((key, index) => (
                                 <div key={key} className="flex items-center gap-2">
                                     <div className="w-2.5 h-2.5 rounded-full ring-2 ring-[#0f172a]" style={{ backgroundColor: chartColors[index] }} />
-                                    <span className="text-xs text-slate-400 font-medium">{key}</span>
+                                    <span className="text-xs text-[var(--text-secondary)] font-medium">{key}</span>
                                 </div>
                             ))}
                         </div>
-                    </div>
-
-                    {/* Task Lists Grid */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full pb-8">
-                        {/* Overdue */}
-                        <TaskListCard
-                            title="Tareas Vencidas"
-                            count={overdueTasks.length}
-                            icon="priority_high"
-                            color="red"
-                            tasks={overdueTasks.slice(0, 5)}
-                            onTaskClick={onNavigateToTask}
-                            onViewAll={() => setActiveModal({
-                                type: 'overdue',
-                                title: 'Tareas Vencidas',
-                                tasks: overdueTasks,
-                                color: 'red',
-                                icon: 'priority_high'
-                            })}
-                        />
-
-                        {/* Due Today */}
-                        <TaskListCard
-                            title="Vencen Hoy"
-                            count={dueTodayTasks.length}
-                            icon="today"
-                            color="orange"
-                            tasks={dueTodayTasks.slice(0, 5)}
-                            onTaskClick={onNavigateToTask}
-                            onViewAll={() => setActiveModal({
-                                type: 'dueToday',
-                                title: 'Vencen Hoy',
-                                tasks: dueTodayTasks,
-                                color: 'orange',
-                                icon: 'today'
-                            })}
-                        />
                     </div>
                 </div >
             </div >
@@ -304,14 +317,14 @@ const StatCard = ({ icon, color, label, value, change, changeColor = "text-emera
     };
 
     return (
-        <div className="flex items-center gap-3 rounded-xl p-4 bg-[#0f172a] border border-slate-700/50 shadow-lg hover:shadow-xl hover:bg-[#1e293b] hover:-translate-y-1 transition-all duration-300 group cursor-default">
+        <div className="flex items-center gap-3 rounded-xl p-4 bg-[var(--bg-secondary)] dark:bg-[#0f172a] border border-[var(--border-default)] dark:border-slate-700/50 shadow-[var(--shadow-lg)] hover:shadow-[var(--shadow-xl)] hover:bg-stone-50 dark:hover:bg-[#1e293b] hover:-translate-y-1 transition-all duration-300 group cursor-default">
             <div className={`w-12 h-12 flex items-center justify-center rounded-xl shrink-0 ${colorClasses[color]} transition-transform duration-300 group-hover:scale-110`}>
                 <span className="material-symbols-outlined text-[24px]">{icon}</span>
             </div>
             <div className="flex flex-col">
-                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-0.5">{label}</p>
+                <p className="text-[var(--text-muted)] text-[10px] font-bold uppercase tracking-wider mb-0.5">{label}</p>
                 <div className="flex items-baseline gap-2">
-                    <p className="text-white text-2xl font-bold tracking-tight">{value}</p>
+                    <p className="text-[var(--text-primary)] text-2xl font-bold tracking-tight">{value}</p>
                     <span className={`${color === 'red' ? 'text-red-400' : changeColor} text-[10px] font-bold bg-white/5 px-1.5 rounded-full`}>{change}</span>
                 </div>
             </div>
@@ -339,21 +352,21 @@ const TaskListCard = ({ title, count, icon, color, tasks, onViewAll, onTaskClick
     const c = colorMap[color];
 
     return (
-        <div className={`flex flex-col rounded-2xl bg-[#0f172a] border border-slate-700/50 shadow-xl overflow-hidden h-full group hover:border-slate-600/50 transition-colors`}>
+        <div className={`flex flex-col rounded-2xl bg-[var(--bg-secondary)] dark:bg-[#0f172a] border border-[var(--border-default)] dark:border-slate-700/50 shadow-[var(--shadow-xl)] overflow-hidden h-full group hover:border-[var(--border-strong)] dark:hover:border-slate-600/50 transition-colors`}>
             {/* Header */}
-            <div className={`px-4 py-3 border-b border-slate-800 bg-gradient-to-r ${c.headerGradient} flex justify-between items-center relative overflow-hidden`}>
+            <div className={`px-4 py-3 border-b border-[var(--border-subtle)] dark:border-slate-800 bg-gradient-to-r ${c.headerGradient} flex justify-between items-center relative overflow-hidden`}>
                 <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
                 <div className="flex items-center gap-3 relative z-10">
                     <div className={`w-8 h-8 flex items-center justify-center rounded-lg ${c.iconBg} ${c.iconText} shadow-lg`}>
                         <span className="material-symbols-outlined text-[20px]">{icon}</span>
                     </div>
-                    <h4 className="text-white font-bold text-base tracking-wide">{title}</h4>
+                    <h4 className="text-[var(--text-primary)] font-bold text-base tracking-wide">{title}</h4>
                 </div>
                 <span className={`bg-[#0f172a]/50 border border-white/10 ${c.iconText} text-xs px-3 py-1 rounded-full font-bold shadow-sm backdrop-blur-sm z-10`}>{count}</span>
             </div>
 
             {/* List */}
-            <div className="flex-1 flex flex-col divide-y divide-slate-800/50 overflow-y-auto max-h-[350px] custom-scrollbar bg-[#0f172a]">
+            <div className="flex-1 flex flex-col divide-y divide-[var(--border-subtle)] overflow-y-auto max-h-[350px] custom-scrollbar bg-[var(--bg-primary)]">
                 {tasks.length === 0 ? (
                     <div className="flex-1 flex flex-col items-center justify-center p-10 text-center opacity-50 h-full">
                         <span className="material-symbols-outlined text-4xl text-slate-600">task_alt</span>
@@ -362,20 +375,20 @@ const TaskListCard = ({ title, count, icon, color, tasks, onViewAll, onTaskClick
                 ) : tasks.map(task => (
                     <div key={task.id}
                         onClick={() => onTaskClick?.(task)}
-                        className="p-4 hover:bg-[#1e293b] transition-colors group/item cursor-pointer flex flex-col gap-2 relative"
+                        className="p-4 hover:bg-stone-50 dark:hover:bg-[#1e293b] transition-colors group/item cursor-pointer flex flex-col gap-2 relative"
                     >
                         <div className="absolute left-0 top-0 bottom-0 w-[2px] bg-transparent group-hover/item:bg-indigo-500 transition-colors"></div>
                         {/* Top Row: Title */}
                         <div className="pl-2">
-                            <h5 className="text-sm font-bold text-slate-200 group-hover/item:text-white leading-snug">{task.title}</h5>
+                            <h5 className="text-sm font-bold text-[var(--text-primary)] leading-snug">{task.title}</h5>
                             {task.description && (
-                                <p className="text-xs text-slate-400 line-clamp-2 mt-1 font-medium">{task.description}</p>
+                                <p className="text-xs text-[var(--text-secondary)] line-clamp-2 mt-1 font-medium">{task.description}</p>
                             )}
                         </div>
 
                         {/* Location Context (Board > Column) */}
                         <div className="flex items-center flex-wrap gap-2 text-[10px] pl-2 mt-1">
-                            <span className="flex items-center gap-1 text-slate-500">
+                            <span className="flex items-center gap-1 text-[var(--text-muted)]">
                                 {task.boardTitle}
                             </span>
                             <span className="text-slate-700">/</span>
@@ -387,8 +400,8 @@ const TaskListCard = ({ title, count, icon, color, tasks, onViewAll, onTaskClick
                 ))}
             </div>
 
-            <div className="p-3 bg-[#1e293b]/50 text-center border-t border-slate-800 backdrop-blur-sm">
-                <button onClick={onViewAll} className={`text-xs font-bold text-slate-400 ${c.buttonHover} hover:text-white transition-colors flex items-center justify-center gap-1 mx-auto py-1`}>
+            <div className="p-3 bg-stone-100/50 dark:bg-[#1e293b]/50 text-center border-t border-[var(--border-subtle)] dark:border-slate-800 backdrop-blur-sm">
+                <button onClick={onViewAll} className={`text-xs font-bold text-[var(--text-secondary)] ${c.buttonHover} hover:text-[var(--text-primary)] transition-colors flex items-center justify-center gap-1 mx-auto py-1`}>
                     Ver lista completa <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                 </button>
             </div>

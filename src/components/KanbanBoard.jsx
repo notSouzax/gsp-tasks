@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { calculateNextNotification } from '../utils/helpers';
+import { AutomationEngine } from '../features/automations';
 import {
     DndContext,
     closestCenter,
@@ -11,7 +13,7 @@ import {
     useSensors,
     DragOverlay,
     defaultDropAnimationSideEffects,
-    MeasuringStrategy, // Import MeasuringStrategy
+    MeasuringStrategy,
 } from '@dnd-kit/core';
 
 import {
@@ -35,6 +37,29 @@ const sortCardsByDate = (cards) => {
         const dateB = b.next_notification_at ? new Date(b.next_notification_at).getTime() : Number.MAX_SAFE_INTEGER;
         if (dateA === dateB) return a.position - b.position;
         return dateA - dateB;
+    });
+};
+
+// Custom collision detection that filters droppables by type
+// When dragging a COLUMN, only consider other COLUMNS as valid targets
+// When dragging a TASK, consider all targets (tasks and columns for cross-container)
+const createTypeAwareCollisionDetection = (activeDragType) => (args) => {
+    const { droppableContainers, ...rest } = args;
+
+    // Filter droppables based on what we're dragging
+    const filteredContainers = droppableContainers.filter(container => {
+        const id = String(container.id);
+        if (activeDragType === 'COLUMN') {
+            // When dragging a column, only allow dropping on other columns
+            return id.startsWith('col-');
+        }
+        // When dragging a task, allow all targets
+        return true;
+    });
+
+    return closestCenter({
+        ...rest,
+        droppableContainers: filteredContainers,
     });
 };
 
@@ -65,6 +90,12 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         })
     );
 
+    // Memoize collision detection to prevent infinite re-renders
+    const collisionDetection = useMemo(
+        () => createTypeAwareCollisionDetection(activeDragType),
+        [activeDragType]
+    );
+
     useEffect(() => {
         // CRITICAL: Only sync from props when BOARD CHANGES.
         // We ignore prop updates for the same board to prevent "Echo Loops" and "Stale Prop Reverts" during drag.
@@ -73,6 +104,45 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         columnsRef.current = initialColumns;
         lastReportedColumnsRef.current = JSON.stringify(initialColumns);
     }, [boardId]); // ONLY triggers on board switch
+
+    // Initialize AutomationEngine
+    useEffect(() => {
+        if (currentUser?.id) {
+            AutomationEngine.initialize(currentUser.id);
+        }
+    }, [currentUser?.id]);
+
+    // Listen for automation data changes and refresh
+    useEffect(() => {
+        const handleDataChange = async () => {
+            // Refrescar columnas desde Supabase cuando una automatización cambie datos
+            try {
+                const { data: freshColumns } = await supabase
+                    .from('columns')
+                    .select(`
+                        *,
+                        cards:tasks(
+                            *,
+                            comments(*)
+                        )
+                    `)
+                    .eq('board_id', boardId)
+                    .order('position');
+
+                if (freshColumns) {
+                    setColumns(freshColumns);
+                }
+            } catch (error) {
+                console.error('Error refrescando después de automatización:', error);
+            }
+        };
+
+        AutomationEngine.on('dataChanged', handleDataChange);
+
+        return () => {
+            AutomationEngine.off('dataChanged', handleDataChange);
+        };
+    }, [boardId]);
 
     // Handle initial task navigation
     useEffect(() => {
@@ -222,7 +292,7 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
 
         if (error) {
             console.error("Error creating task:", error);
-            alert("Error creando tarea: " + error.message);
+            toast.error("Error creando tarea: " + error.message);
             return;
         }
 
@@ -272,6 +342,14 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         if (targetColumn.card_config?.auto_sort) {
             setTimeout(() => handleToggleSort(targetColumn.id, true), 500);
         }
+
+        // 🤖 AUTOMATION: Disparar trigger task.created
+        AutomationEngine.trigger('task.created', {
+            task: newTaskForUI,
+            column: targetColumn,
+            columns,
+            userId: currentUser?.id
+        });
     }, [columns, creatingTaskColumn, currentUser, handleToggleSort, updateLocalColumns]);
 
     const handleUpdateTask = useCallback(async (updatedTask) => {
@@ -396,7 +474,7 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
             let newIndex;
             // ... (Rest of logic is fine)
             if (overId === overContainer) {
-                newIndex = overItems.length + 1;
+                newIndex = overItems.length;
             } else {
                 const isBelowOverItem =
                     over &&
@@ -405,7 +483,7 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
                     over.rect.top + over.rect.height;
 
                 const modifier = isBelowOverItem ? 1 : 0;
-                newIndex = overIndex >= 0 ? overIndex + modifier : overItems.length + 1;
+                newIndex = overIndex >= 0 ? overIndex + modifier : overItems.length;
             }
             // ...
 
@@ -442,16 +520,24 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
 
         if (activeDragType === 'COLUMN') {
             if (active.id !== over.id) {
+                const overId = over.id;
+                const actualOverId = String(overId).startsWith('col-') ? overId : findContainer(overId);
+
+                if (!actualOverId) return;
+
                 const oldIndex = cols.findIndex(c => 'col-' + c.id === active.id);
-                const newIndex = cols.findIndex(c => 'col-' + c.id === over.id);
+                const newIndex = cols.findIndex(c => 'col-' + c.id === actualOverId);
                 const newColumns = arrayMove(cols, oldIndex, newIndex);
                 updateLocalColumns(newColumns);
-                // DB Update
-                for (let i = 0; i < newColumns.length; i++) {
-                    if (newColumns[i].position !== i) {
-                        await supabase.from('columns').update({ position: i }).eq('id', newColumns[i].id);
-                    }
-                }
+                // DB Update in parallel
+                await Promise.all(
+                    newColumns
+                        .filter((col, i) => col.position !== i)
+                        .map((col) => {
+                            const newPos = newColumns.indexOf(col);
+                            return supabase.from('columns').update({ position: newPos }).eq('id', col.id);
+                        })
+                );
             }
             return;
         }
@@ -483,10 +569,10 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
                     // Update state
                     const newCols = cols.map(c => c.id === finalColumn.id ? { ...c, cards: sortedCards } : c);
                     updateLocalColumns(newCols);
-                    // Update DB positions
-                    for (let i = 0; i < sortedCards.length; i++) {
-                        await supabase.from('tasks').update({ position: i }).eq('id', sortedCards[i].id);
-                    }
+                    // Update DB positions in parallel
+                    await Promise.all(sortedCards.map((card, i) =>
+                        supabase.from('tasks').update({ position: i }).eq('id', card.id)
+                    ));
                 }
             } else {
                 // Cross container logic (DB persistence of new state)
@@ -505,16 +591,41 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
                     next_notification_at: nextNotif
                 }).eq('id', task.id);
 
-                for (let i = 0; i < finalColumn.cards.length; i++) {
-                    await supabase.from('tasks').update({ position: i }).eq('id', finalColumn.cards[i].id);
-                }
+                // Update all positions in parallel
+                await Promise.all(finalColumn.cards.map((card, i) =>
+                    supabase.from('tasks').update({ position: i }).eq('id', card.id)
+                ));
 
                 if (finalColumn.card_config?.auto_sort) {
                     handleToggleSort(finalColumn.id, true);
                 }
+
+                // 🤖 AUTOMATION: Disparar triggers de movimiento
+                const fromCol = cols.find(c => 'col-' + c.id === activeContainer);
+                AutomationEngine.trigger('task.moved', {
+                    task,
+                    fromColumn: fromCol,
+                    toColumn: finalColumn,
+                    columns: cols,
+                    userId: currentUser?.id
+                });
+                AutomationEngine.trigger('task.moved_to', {
+                    task,
+                    fromColumn: fromCol,
+                    toColumn: finalColumn,
+                    columns: cols,
+                    userId: currentUser?.id
+                });
+                AutomationEngine.trigger('task.moved_from', {
+                    task,
+                    fromColumn: fromCol,
+                    toColumn: finalColumn,
+                    columns: cols,
+                    userId: currentUser?.id
+                });
             }
         }
-    }, [activeDragType, findContainer, handleToggleSort, updateLocalColumns]);
+    }, [activeDragType, findContainer, handleToggleSort, updateLocalColumns, currentUser?.id]);
 
     const columnIds = useMemo(() => columns.map((col) => 'col-' + col.id), [columns]);
 
@@ -535,51 +646,43 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
     }), []);
 
 
-    // CUSTOM AUTO-SCROLL: Bypasses dnd-kit's buggy React 18 auto-scroll detection
+    // CUSTOM AUTO-SCROLL: High-performance implementation using requestAnimationFrame
     const scrollContainerRef = useRef(null);
+    const mousePositionRef = useRef({ x: 0, y: 0 });
 
     useEffect(() => {
         if (!activeDragItem || !scrollContainerRef.current) return;
 
         const container = scrollContainerRef.current;
-        const scrollSpeed = 4; // FIXED: Always 4 pixels per frame (constant speed)
-        const edgeThreshold = 100; // pixels from edge to trigger scroll
+        const SCROLL_SPEED = 6;
+        const EDGE_THRESHOLD = 100;
         let animationFrameId = null;
 
-        const handleAutoScroll = (e) => {
-            const rect = container.getBoundingClientRect();
-            const mouseX = e.clientX;
+        const handleMouseMove = (e) => {
+            mousePositionRef.current = { x: e.clientX, y: e.clientY };
+        };
 
-            // Calculate distance from edges
+        const scrollLoop = () => {
+            const rect = container.getBoundingClientRect();
+            const mouseX = mousePositionRef.current.x;
+
             const distFromLeft = mouseX - rect.left;
             const distFromRight = rect.right - mouseX;
 
-            let scrollAmount = 0;
-
-            if (distFromLeft < edgeThreshold) {
-                // Near left edge - scroll left at constant speed
-                scrollAmount = -scrollSpeed;
-            } else if (distFromRight < edgeThreshold) {
-                // Near right edge - scroll right at constant speed
-                scrollAmount = scrollSpeed;
+            if (distFromLeft < EDGE_THRESHOLD && distFromLeft > 0) {
+                container.scrollLeft -= SCROLL_SPEED;
+            } else if (distFromRight < EDGE_THRESHOLD && distFromRight > 0) {
+                container.scrollLeft += SCROLL_SPEED;
             }
 
-            if (scrollAmount !== 0) {
-                container.scrollLeft += scrollAmount;
-            }
-
-            animationFrameId = requestAnimationFrame(() => handleAutoScroll(e));
+            animationFrameId = requestAnimationFrame(scrollLoop);
         };
 
-        const onMouseMove = (e) => {
-            if (animationFrameId) cancelAnimationFrame(animationFrameId);
-            handleAutoScroll(e);
-        };
-
-        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mousemove', handleMouseMove);
+        animationFrameId = requestAnimationFrame(scrollLoop);
 
         return () => {
-            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mousemove', handleMouseMove);
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
         };
     }, [activeDragItem]);
@@ -587,7 +690,7 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
     return (
         <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
+            collisionDetection={collisionDetection}
             measuring={measuringConfig}
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
@@ -596,7 +699,7 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         >
             <div
                 ref={scrollContainerRef}
-                className="flex-1 overflow-x-auto overflow-y-hidden"
+                className="flex-1 overflow-x-auto overflow-y-hidden scrollbar-hide"
             >
                 <div className="h-full flex p-6 gap-6" style={{ minWidth: 'max-content' }}>
                     <SortableContext items={columnIds} strategy={horizontalListSortingStrategy}>
@@ -621,7 +724,7 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
                     <div className="w-40 flex-shrink-0">
                         <button
                             onClick={() => setEditingColumn({ isCreating: true })}
-                            className="w-full h-12 border-2 border-dashed border-white/10 rounded-xl flex items-center justify-center text-gray-500 hover:text-white hover:border-white/20 transition-all"
+                            className="w-full h-12 border-2 border-dashed border-[var(--border-default)] dark:border-white/10 rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-indigo-600 dark:hover:text-white hover:border-indigo-500/30 dark:hover:border-white/20 transition-all"
                         >
                             + Añadir Columna
                         </button>

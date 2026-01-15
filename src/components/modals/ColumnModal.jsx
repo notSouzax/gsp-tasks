@@ -282,7 +282,7 @@ const ColumnModal = ({ column, isCreating, onClose, onUpdate, onDelete }) => {
 
                         <div className="flex justify-end gap-3 pt-4 border-t border-white/5 flex-shrink-0">
                             {!isCreating && (<button type="button" onClick={() => setShowDeleteConfirm(true)} className="px-3 py-2 text-xs font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors mr-auto flex items-center gap-1"><Icons.Trash2 size={14} /> Eliminar</button>)}
-                            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-all">Cancelar</button>
+                            <button type="button" onClick={onClose} className="px-4 py-2 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-stone-100 dark:hover:bg-white/5 rounded-xl transition-all">Cancelar</button>
                             <button type="submit" disabled={!title.trim()} className="px-5 py-2 text-sm font-bold bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-xl shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:transform-none">{isCreating ? "Crear Columna" : "Guardar"}</button>
                         </div>
                     </form>
@@ -300,7 +300,7 @@ const ColumnModal = ({ column, isCreating, onClose, onUpdate, onDelete }) => {
                                 Se eliminarán permanentemente todas las tareas que contenga.<br />Esta acción no se puede deshacer.
                             </p>
                             <div className="flex justify-center gap-3">
-                                <button onClick={() => setShowDeleteConfirm(false)} className="px-5 py-2.5 text-sm font-medium text-slate-400 hover:text-white bg-white/5 hover:bg-white/10 rounded-xl transition-colors">Cancelar</button>
+                                <button onClick={() => setShowDeleteConfirm(false)} className="px-5 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-stone-100 dark:bg-white/5 hover:bg-stone-200 dark:hover:bg-white/10 rounded-xl transition-colors">Cancelar</button>
                                 <button onClick={() => { onDelete(column.id); onClose(); }} className="px-5 py-2.5 text-sm font-bold text-white bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 rounded-xl shadow-lg shadow-red-500/20 transition-all transform hover:-translate-y-0.5">Sí, Eliminar</button>
                             </div>
                         </div>

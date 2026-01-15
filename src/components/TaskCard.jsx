@@ -93,13 +93,13 @@ const TaskCard = ({ task, onClick, onDelete, onUpdate, onMove, color, cardConfig
                 style={style}
                 {...attributes}
                 {...listeners}
-                className={`relative group bg-[#1e293b] hover:bg-[#253045] rounded-lg shadow-md hover:shadow-xl transition-all duration-200 border border-slate-700/50 cursor-grab active:cursor-grabbing overflow-hidden ${isOverlay ? 'shadow-2xl scale-105 rotate-2' : ''}`}
+                className={`relative group bg-[var(--bg-secondary)] dark:bg-[#1e293b] hover:bg-stone-50 dark:hover:bg-[#253045] rounded-lg shadow-[var(--shadow-md)] hover:shadow-[var(--shadow-lg)] hover:scale-[1.01] transition-all duration-200 border border-[var(--border-subtle)] dark:border-slate-700/50 cursor-grab active:cursor-grabbing overflow-hidden ${isOverlay ? 'shadow-2xl scale-105 rotate-2' : ''}`}
             // Specific style for border
             >
                 <div style={{ borderLeft: `4px solid ${borderColor}` }} className="p-3">
                     <div className="pr-6">
-                        <h3 className="font-medium text-slate-200 text-sm leading-snug select-text w-fit">{task.title}</h3>
-                        {task.description && <p className="text-slate-500 text-xs mt-1 truncate select-text w-fit">{task.description}</p>}
+                        <h3 className="font-medium text-[var(--text-primary)] text-sm leading-snug select-text w-fit">{task.title}</h3>
+                        {task.description && <p className="text-[var(--text-secondary)] text-xs mt-1 truncate select-text w-fit">{task.description}</p>}
                     </div>
 
                     {!isOverlay && (
@@ -126,21 +126,21 @@ const TaskCard = ({ task, onClick, onDelete, onUpdate, onMove, color, cardConfig
             {...attributes}
             {...listeners}
             className={`
-                relative group bg-[#1e293b] hover:bg-[#253045] rounded-xl shadow-lg hover:shadow-2xl transition-colors duration-300 w-full mb-3 flex flex-col gap-3 overflow-hidden border border-slate-700/50 shrink-0 cursor-grab active:cursor-grabbing
+                relative group bg-[var(--bg-secondary)] dark:bg-[#1e293b] hover:bg-stone-50 dark:hover:bg-[#253045] rounded-xl shadow-[var(--shadow-md)] hover:shadow-[var(--shadow-xl)] hover:scale-[1.01] transition-all duration-300 w-full mb-3 flex flex-col gap-3 overflow-hidden border border-[var(--border-subtle)] dark:border-slate-700/50 shrink-0 cursor-grab active:cursor-grabbing
                 ${isOverlay ? 'shadow-2xl scale-105 rotate-2 z-50' : ''}
             `}
         >
             {/* Note: In dnd-kit, the whole element is draggable via listeners. If we wanted drag handle only, we'd apply listeners to a handle element. Here we apply to root. */}
 
             {/* Color Stripe Top */}
-            <div className="h-1 w-full shrink-0" style={{ backgroundColor: borderColor }}></div>
+            <div className="h-1.5 w-full shrink-0" style={{ backgroundColor: borderColor }}></div>
 
             <div className="px-4 pb-4 pt-2 flex flex-col gap-3">
 
                 {/* Title Row */}
                 <div className="flex justify-between items-start gap-3">
                     <div className="flex-1">
-                        <h3 className="font-semibold text-slate-100 text-base leading-tight tracking-tight select-text w-fit">
+                        <h3 className="font-semibold text-[var(--text-primary)] text-base leading-tight tracking-tight select-text w-fit">
                             {task.title}
                         </h3>
                         {isReminderActive(task) && (
@@ -173,14 +173,14 @@ const TaskCard = ({ task, onClick, onDelete, onUpdate, onMove, color, cardConfig
 
                 {/* Description */}
                 {task.description && (
-                    <div className="text-slate-400 text-sm leading-relaxed line-clamp-3 select-text w-fit max-w-full">
+                    <div className="text-[var(--text-secondary)] text-sm leading-relaxed line-clamp-3 select-text w-fit max-w-full">
                         <Linkify text={task.description} />
                     </div>
                 )}
 
                 {/* CHECKLIST */}
                 {Array.isArray(task.checklist) && task.checklist.length > 0 && (
-                    <div className="bg-slate-950/30 rounded-lg p-2 border border-slate-700/50 space-y-1.5">
+                    <div className="bg-stone-100 dark:bg-slate-950/30 rounded-lg p-2.5 border border-[var(--border-default)] space-y-1.5">
                         {task.checklist.map(item => (
                             <div
                                 key={item.id}
@@ -235,7 +235,7 @@ const TaskCard = ({ task, onClick, onDelete, onUpdate, onMove, color, cardConfig
                                 {formatTimeShort(lastComment.createdAt || lastComment.created_at)}
                             </span>
                         </div>
-                        <p className="text-slate-300 leading-snug line-clamp-2 italic select-text w-fit">"{lastComment.text}"</p>
+                        <p className="text-[var(--text-secondary)] leading-snug line-clamp-2 italic select-text w-fit">"{lastComment.text}"</p>
 
                         {/* Quick Comment Input */}
                         {showQuickComment && (
@@ -247,7 +247,7 @@ const TaskCard = ({ task, onClick, onDelete, onUpdate, onMove, color, cardConfig
                                     onKeyDown={(e) => { if (e.key === 'Enter') handleQuickComment(e); if (e.key === 'Escape') setShowQuickComment(false); }}
                                     placeholder="Escribe..."
                                     autoFocus
-                                    className="flex-1 bg-slate-800/80 border border-slate-600 rounded px-2 py-1 text-xs text-white placeholder-slate-500 outline-none focus:border-slate-500"
+                                    className="flex-1 bg-[var(--bg-primary)] border border-[var(--border-default)] rounded px-2 py-1 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] outline-none focus:border-indigo-500"
                                 />
                                 <button
                                     onClick={handleQuickComment}
@@ -262,9 +262,9 @@ const TaskCard = ({ task, onClick, onDelete, onUpdate, onMove, color, cardConfig
                 )}
 
                 {/* Footer Meta & Actions */}
-                <div className="flex items-center justify-between pt-2 border-t border-slate-700/50 mt-1">
+                <div className="flex items-center justify-between pt-2.5 border-t border-[var(--border-default)] mt-1">
                     {/* Meta Info */}
-                    <div className="flex items-center gap-3 text-slate-500">
+                    <div className="flex items-center gap-3 text-[var(--text-muted)]">
                         <div className="flex items-center text-xs gap-1" title="Creado">
                             <Icons.Calendar size={12} />
                             <span>{formatDate(task.createdAt)}</span>
@@ -300,7 +300,7 @@ const TaskCard = ({ task, onClick, onDelete, onUpdate, onMove, color, cardConfig
                                         const opt = ORDER_OPTIONS.find(o => o.id === e.target.value);
                                         if (opt) onMove(task, opt.action, opt.id);
                                     }}
-                                    className="appearance-none bg-[#1e293b] hover:bg-[#253045] border border-slate-700 rounded-lg py-1.5 pl-2.5 pr-8 text-[10px] text-slate-300 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none cursor-pointer transition-all"
+                                    className="appearance-none bg-[var(--bg-primary)] hover:bg-[var(--bg-secondary)] border border-[var(--border-default)] rounded-lg py-1.5 pl-2.5 pr-8 text-[10px] text-[var(--text-secondary)] focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none cursor-pointer transition-all"
                                 >
                                     <option value="" disabled>Estado</option>
                                     {ORDER_OPTIONS.map(opt => (

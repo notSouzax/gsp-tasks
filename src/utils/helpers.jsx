@@ -1,5 +1,15 @@
 import React from 'react';
 
+// Re-export date helpers for backward compatibility
+export {
+    formatRelativeTime,
+    formatDateTime,
+    formatDate,
+    formatDateGroup
+} from './dateHelpers';
+
+// --- CONSTANTS ---
+
 export const AVAILABLE_COLORS = [
     "slate", "gray", "zinc", "red", "orange", "amber", "yellow", "lime", "green", "emerald",
     "teal", "cyan", "sky", "blue", "indigo", "violet", "purple", "fuchsia", "pink", "rose"
@@ -12,6 +22,17 @@ export const COLOR_MAP = {
     blue: '#3b82f6', indigo: '#6366f1', violet: '#8b5cf6', purple: '#a855f7', fuchsia: '#d946ef',
     pink: '#ec4899', rose: '#f43f5e'
 };
+
+export const TIME_UNITS = [
+    { value: 'minutes', label: 'Minuto/s' },
+    { value: 'hours', label: 'Hora/s' },
+    { value: 'days', label: 'Día/s' },
+    { value: 'weeks', label: 'Semana/s' },
+    { value: 'months', label: 'Mes/es' },
+    { value: 'years', label: 'Año/s' }
+];
+
+// --- COMPONENTS ---
 
 export const Linkify = ({ text }) => {
     if (!text) return null;
@@ -29,31 +50,7 @@ export const Linkify = ({ text }) => {
     );
 };
 
-export const formatDate = (timestamp, includeTime = false) => {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    const options = {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-    };
-
-    if (includeTime) {
-        options.hour = '2-digit';
-        options.minute = '2-digit';
-    }
-
-    return date.toLocaleString('es-ES', options);
-};
-
-export const TIME_UNITS = [
-    { value: 'minutes', label: 'Minuto/s' },
-    { value: 'hours', label: 'Hora/s' },
-    { value: 'days', label: 'Día/s' },
-    { value: 'weeks', label: 'Semana/s' },
-    { value: 'months', label: 'Mes/es' },
-    { value: 'years', label: 'Año/s' }
-];
+// --- REMINDER UTILITIES ---
 
 export const getEffectiveCardReminder = (card, column) => {
     if (card?.reminder_enabled) {

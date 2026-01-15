@@ -4,45 +4,155 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   DESIGN SYSTEM - CSS Variables
+   ========================================================================== */
+
 :root {
-    --bg-primary: #0f172a;
-    --bg-secondary: #1e293b;
-    --text-primary: #f3f4f6;
-    --text-secondary: #9ca3af;
-    --border-color: rgba(255, 255, 255, 0.1);
+    /* ===== LIGHT MODE (Default) ===== */
+    /* Warm Stone Palette - Professional, easy on the eyes */
+    --bg-primary: #FAFAF9;
+    /* Stone 50 - Warm neutral base */
+    --bg-secondary: #FFFFFF;
+    /* Pure white for cards */
+    --bg-tertiary: #F5F5F4;
+    /* Stone 100 - Sidebar/Header */
+    --bg-elevated: #FFFFFF;
+    /* Modals, dropdowns */
+
+    --text-primary: #1C1917;
+    /* Stone 900 - Deep warm black */
+    --text-secondary: #57534E;
+    /* Stone 600 - Medium warm gray */
+    --text-muted: #A8A29E;
+    /* Stone 400 - Soft placeholders */
+    --text-inverted: #FFFFFF;
+    /* For dark backgrounds */
+
+    --border-subtle: #E7E5E4;
+    /* Stone 200 - Subtle borders */
+    --border-default: #D6D3D1;
+    /* Stone 300 - Default borders */
+    --border-strong: #A8A29E;
+    /* Stone 400 - Strong borders */
+
+    /* Shadows - Enhanced depth and warmth */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+
+    /* Glassmorphism - Light mode */
+    --glass-bg: rgba(255, 255, 255, 0.9);
+    --glass-border: rgba(28, 25, 23, 0.08);
+    --glass-blur: blur(16px);
+
+    /* Accent Colors - Consistent across themes */
+    --accent-primary: #6366F1;
+    /* Indigo 500 */
+    --accent-hover: #4F46E5;
+    /* Indigo 600 */
+    --accent-muted: rgba(99, 102, 241, 0.1);
+
+    /* Overlay */
+    --overlay-bg: rgba(28, 25, 23, 0.5);
+
+    /* Layout */
     --column-width: 365px;
     --font-size-base: 14px;
     --spacing-unit: 1rem;
 }
+
+/* ===== DARK MODE ===== */
+/* Preserving original dark theme exactly as it was */
+.dark {
+    --bg-primary: #0f172a;
+    /* Original: slate-900 */
+    --bg-secondary: #1e293b;
+    /* Original: slate-800 */
+    --bg-tertiary: #0b1120;
+    /* Darker sidebar */
+    --bg-elevated: #1e293b;
+    /* Modals */
+
+    --text-primary: #f3f4f6;
+    /* gray-100 */
+    --text-secondary: #9ca3af;
+    /* gray-400 */
+    --text-muted: #64748b;
+    /* slate-500 */
+    --text-inverted: #0f172a;
+
+    --border-subtle: rgba(255, 255, 255, 0.05);
+    --border-default: rgba(255, 255, 255, 0.1);
+    --border-strong: rgba(255, 255, 255, 0.2);
+
+    /* Shadows - Dark mode uses subtle glows */
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.4);
+    --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+
+    /* Glassmorphism - Dark mode */
+    --glass-bg: rgba(30, 41, 59, 0.8);
+    --glass-border: rgba(255, 255, 255, 0.05);
+
+    /* Overlay */
+    --overlay-bg: rgba(0, 0, 0, 0.6);
+    --overlay-bg: rgba(0, 0, 0, 0.6);
+}
+
+/* ==========================================================================
+   BASE STYLES
+   ========================================================================== */
 
 body {
     background-color: var(--bg-primary);
     color: var(--text-primary);
     font-size: var(--font-size-base);
     font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
+
+/* Smooth theme transition for all major containers */
+.theme-transition,
+.theme-transition * {
+    transition: background-color 0.3s ease,
+        color 0.3s ease,
+        border-color 0.3s ease,
+        box-shadow 0.3s ease !important;
+}
+
+/* ==========================================================================
+   GLASS PANEL
+   ========================================================================== */
 
 .glass-panel {
-    background: rgba(255, 255, 255, 0.03);
-    backdrop-filter: blur(10px);
-    border: 1px solid var(--border-color);
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
 }
 
+/* Dark mode glass - preserved original styling */
 .dark .glass-panel {
     background: #1b2537;
-    /* Final user requested color */
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
 }
 
-/* Light mode overrides for glass panel if needed, but we'll stick to variables mostly */
+/* Light mode glass */
 :not(.dark) .glass-panel {
-    background: rgba(255, 255, 255, 0.7);
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(28, 25, 23, 0.08);
+    box-shadow: var(--shadow-lg),
+        inset 0 1px 0 0 rgba(255, 255, 255, 0.4);
 }
 
-/* Custom Scrollbar */
-/* Global Custom Scrollbar */
+/* ==========================================================================
+   SCROLLBARS
+   ========================================================================== */
+
 /* Global Custom Scrollbar */
 ::-webkit-scrollbar {
     width: 6px;
@@ -55,47 +165,71 @@ body {
 
 ::-webkit-scrollbar-thumb {
     background: rgba(100, 116, 139, 0.5);
-    /* Slate-500 @ 50% */
     border-radius: 99px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
     background: rgba(99, 102, 241, 0.8);
-    /* Indigo-500 */
+}
+
+/* Light mode scrollbar */
+:not(.dark)::-webkit-scrollbar-thumb {
+    background: rgba(168, 162, 158, 0.4);
+}
+
+:not(.dark)::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.7);
 }
 
 /* Specific class for containers */
 .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
+    width: 10px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-    background: transparent;
+    background: rgba(30, 41, 59, 0.5);
     margin-block: 4px;
-    /* Space at top/bottom */
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb {
-    background-color: rgba(148, 163, 184, 0.3);
-    /* Slate-400 @ 30% */
     border-radius: 9999px;
 }
 
+.dark .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(30, 41, 59, 0.5);
+}
+
+:not(.dark) .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(245, 245, 244, 0.8);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(148, 163, 184, 0.6);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background-color: rgba(99, 102, 241, 0.8);
+    background-color: rgba(99, 102, 241, 0.9);
 }
 
 /* For Firefox */
 * {
     scrollbar-width: thin;
+    scrollbar-color: rgba(100, 116, 139, 0.4) transparent;
+}
+
+.dark * {
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
+
+/* ==========================================================================
+   LAYOUT UTILITIES
+   ========================================================================== */
 
 .writing-vertical {
     writing-mode: vertical-rl;
 }
 
-/* NUCLEAR OPTION: Fixed Column Width */
+/* Fixed Column Width */
 .fixed-width-column {
     width: var(--column-width, 365px) !important;
     min-width: var(--column-width, 365px) !important;
@@ -110,12 +244,55 @@ body {
     flex: 0 0 4rem !important;
 }
 
-/*
-   Custom transition that ONLY affects sizing properties.
-   This is critical to avoid layout shifts during column resize.
-*/
+/* Column size transition */
 .column-size-transition {
     transition-property: width, min-width, max-width, flex-basis, flex-grow, flex-shrink;
     transition-duration: 300ms;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Hide scrollbar utility */
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}
+
+/* ==========================================================================
+   LIGHT MODE SPECIFIC OVERRIDES
+   These classes apply ONLY in light mode to fix dark-hardcoded elements
+   ========================================================================== */
+
+/* Card backgrounds */
+:not(.dark) .light-card {
+    background-color: var(--bg-secondary) !important;
+    border-color: var(--border-subtle) !important;
+    box-shadow: var(--shadow-md);
+}
+
+/* Panel backgrounds */
+:not(.dark) .light-panel {
+    background-color: var(--bg-tertiary) !important;
+    border-color: var(--border-subtle) !important;
+}
+
+/* Form inputs */
+:not(.dark) .light-input {
+    background-color: var(--bg-secondary) !important;
+    border-color: var(--border-default) !important;
+    color: var(--text-primary) !important;
+}
+
+:not(.dark) .light-input::placeholder {
+    color: var(--text-muted) !important;
+}
+
+/* Dropdown menus */
+:not(.dark) .light-dropdown {
+    background-color: var(--bg-elevated) !important;
+    border-color: var(--border-subtle) !important;
+    box-shadow: var(--shadow-lg) !important;
 }

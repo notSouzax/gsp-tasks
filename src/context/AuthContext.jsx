@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import logger from '../utils/logger';
 
 const AuthContext = createContext();
 
@@ -10,7 +11,7 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        console.log("AuthProvider: Initializing...");
+        logger.debug('AuthProvider', 'Initializing...');
         // 1. Check active session
         const checkSession = async () => {
             try {
@@ -23,7 +24,7 @@ export const AuthProvider = ({ children }) => {
                     setLoading(false);
                 }
             } catch (err) {
-                console.error("Auth initialization error:", err);
+                logger.error("Auth initialization error:", err);
                 setLoading(false); // Ensure we unblock
             }
         };
@@ -32,7 +33,7 @@ export const AuthProvider = ({ children }) => {
 
         // 2. Listen for auth changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            console.log("Auth State Changed:", _event);
+            logger.debug('AuthProvider', 'Auth State Changed:', _event);
             if (session?.user) {
                 await fetchProfile(session.user);
             } else {
@@ -45,7 +46,7 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const fetchProfile = async (user) => {
-        console.log("fetchProfile: Starting for user", user.id);
+        logger.debug('fetchProfile', 'Starting for user', user.id);
         try {
             // Timeout after 2 seconds to prevent hanging
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 2000));
@@ -57,10 +58,10 @@ export const AuthProvider = ({ children }) => {
 
             const { data, error } = await Promise.race([dbPromise, timeoutPromise]);
 
-            console.log("fetchProfile: Supabase response", { data, error });
+            logger.debug('fetchProfile', 'Supabase response', { data, error });
 
             if (error) {
-                console.error('Error fetching profile:', error);
+                logger.error('Error fetching profile:', error);
                 // Fallback if profile doesn't exist yet (signup lag)
                 setCurrentUser({
                     id: user.id,
@@ -73,7 +74,7 @@ export const AuthProvider = ({ children }) => {
                 setCurrentUser({ ...user, ...data, name: data.full_name || user.email.split('@')[0] });
             }
         } catch (err) {
-            console.error("fetchProfile ERROR/TIMEOUT:", err);
+            logger.error("fetchProfile ERROR/TIMEOUT:", err);
             // Fallback to user metadata
             setCurrentUser({
                 id: user.id,
@@ -83,7 +84,7 @@ export const AuthProvider = ({ children }) => {
                 ...user.user_metadata
             });
         } finally {
-            console.log("fetchProfile: Finished, setting loading=false");
+            logger.debug('fetchProfile', 'Finished, setting loading=false');
             setLoading(false);
         }
     };
@@ -132,7 +133,7 @@ export const AuthProvider = ({ children }) => {
                 .eq('id', userId);
 
             if (error) {
-                console.error('Error updating profile:', error);
+                logger.error('Error updating profile:', error);
                 return { success: false, message: error.message };
             }
 
@@ -140,7 +141,7 @@ export const AuthProvider = ({ children }) => {
             setCurrentUser(prev => ({ ...prev, ...updates }));
             return { success: true };
         } catch (err) {
-            console.error('Error updating profile:', err);
+            logger.error('Error updating profile:', err);
             return { success: false, message: err.message };
         }
     };

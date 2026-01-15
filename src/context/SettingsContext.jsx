@@ -1,17 +1,26 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 
 const SettingsContext = createContext();
 
 export const useSettings = () => useContext(SettingsContext);
 
+// Detect system theme preference
+const getSystemTheme = () => {
+    if (typeof window !== 'undefined' && window.matchMedia) {
+        return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    return 'dark';
+};
+
 export const SettingsProvider = ({ children }) => {
-    const { currentUser } = useAuth();
+    const authContext = useAuth();
+    const currentUser = authContext?.currentUser;
 
     const [settings, setSettings] = useState(() => {
         // Default settings
         const defaults = {
-            theme: 'dark',
+            theme: 'system', // 'dark', 'light', or 'system'
             columnWidth: 365,
             fontSize: 14,
             autoArchiveHours: 0,
@@ -28,6 +37,14 @@ export const SettingsProvider = ({ children }) => {
         return saved ? JSON.parse(saved) : defaults;
     });
 
+    // Track the actual resolved theme (for 'system' mode)
+    const [resolvedTheme, setResolvedTheme] = useState(() => {
+        if (settings.theme === 'system') {
+            return getSystemTheme();
+        }
+        return settings.theme;
+    });
+
     // Update settings when user changes
     useEffect(() => {
         if (!currentUser) return;
@@ -39,7 +56,7 @@ export const SettingsProvider = ({ children }) => {
         } else {
             // Reset to defaults if no settings found for this user
             setSettings({
-                theme: 'dark',
+                theme: 'system',
                 columnWidth: 365,
                 fontSize: 14,
                 autoArchiveHours: 0,
@@ -52,45 +69,72 @@ export const SettingsProvider = ({ children }) => {
         }
     }, [currentUser]);
 
-    const applySettings = (s) => {
-        const root = document.documentElement;
-
-        // Theme
-        if (s.theme === 'dark') {
-            root.classList.add('dark');
-            root.style.setProperty('--bg-primary', '#0f172a'); // slate-900
-            root.style.setProperty('--bg-secondary', '#1e293b'); // slate-800
-            root.style.setProperty('--text-primary', '#f3f4f6'); // gray-100
-            root.style.setProperty('--text-secondary', '#9ca3af'); // gray-400
-            root.style.setProperty('--border-color', 'rgba(255, 255, 255, 0.1)');
-        } else {
-            root.classList.remove('dark');
-            root.style.setProperty('--bg-primary', '#f9fafb'); // gray-50
-            root.style.setProperty('--bg-secondary', '#ffffff'); // white
-            root.style.setProperty('--text-primary', '#111827'); // gray-900
-            root.style.setProperty('--text-secondary', '#4b5563'); // gray-600
-            root.style.setProperty('--border-color', 'rgba(0, 0, 0, 0.1)');
+    // Listen for system theme changes
+    useEffect(() => {
+        if (settings.theme !== 'system') {
+            setResolvedTheme(settings.theme);
+            return;
         }
 
-        // Layout
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+
+        const handleChange = (e) => {
+            setResolvedTheme(e.matches ? 'dark' : 'light');
+        };
+
+        // Set initial value
+        setResolvedTheme(mediaQuery.matches ? 'dark' : 'light');
+
+        // Listen for changes
+        mediaQuery.addEventListener('change', handleChange);
+
+        return () => mediaQuery.removeEventListener('change', handleChange);
+    }, [settings.theme]);
+
+    const applySettings = useCallback((s, resolved) => {
+        const root = document.documentElement;
+        const themeToApply = s.theme === 'system' ? resolved : s.theme;
+
+        // Theme: Simply toggle the 'dark' class
+        // CSS variables in index.css handle all color changes
+        if (themeToApply === 'dark') {
+            root.classList.add('dark');
+        } else {
+            root.classList.remove('dark');
+        }
+
+        // Layout settings
         root.style.setProperty('--column-width', `${s.columnWidth}px`);
         root.style.setProperty('--font-size-base', `${s.fontSize}px`);
-    };
+    }, []);
 
     useEffect(() => {
         if (currentUser) {
             localStorage.setItem(`kanban-settings-${currentUser.id}`, JSON.stringify(settings));
         }
-        applySettings(settings);
-    }, [settings, currentUser]);
+        applySettings(settings, resolvedTheme);
+    }, [settings, resolvedTheme, currentUser, applySettings]);
 
     const updateSettings = (updates) => {
         setSettings(prev => ({ ...prev, ...updates }));
     };
 
+    // Convenience function to toggle theme
+    const toggleTheme = () => {
+        setSettings(prev => {
+            const currentResolved = prev.theme === 'system' ? resolvedTheme : prev.theme;
+            return { ...prev, theme: currentResolved === 'dark' ? 'light' : 'dark' };
+        });
+    };
+
+    // Set theme to system preference
+    const useSystemTheme = () => {
+        setSettings(prev => ({ ...prev, theme: 'system' }));
+    };
+
     const resetSettings = () => {
         setSettings({
-            theme: 'dark',
+            theme: 'system',
             columnWidth: 365,
             fontSize: 14,
             autoArchiveHours: 0,
@@ -103,7 +147,15 @@ export const SettingsProvider = ({ children }) => {
     };
 
     return (
-        <SettingsContext.Provider value={{ settings, updateSettings, resetSettings }}>
+        <SettingsContext.Provider value={{
+            settings,
+            updateSettings,
+            resetSettings,
+            toggleTheme,
+            useSystemTheme,
+            resolvedTheme, // The actual theme being applied ('dark' or 'light')
+            isDark: resolvedTheme === 'dark'
+        }}>
             {children}
         </SettingsContext.Provider>
     );

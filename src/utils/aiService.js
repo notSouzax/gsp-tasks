@@ -8,6 +8,8 @@
  * 5. Dynamic Vocabulary & Error Correction (Typos)
  */
 
+import logger from './logger';
+
 // --- TOOL: LEVENSHTEIN DISTANCE ---
 const levenshteinDistance = (a, b) => {
     if (a.length === 0) return b.length;
@@ -167,7 +169,7 @@ const EntityMemory = {
             const saved = localStorage.getItem(this.key);
             return saved ? JSON.parse(saved) : [];
         } catch (e) {
-            console.error("Error reading entity memory", e);
+            logger.error("Error reading entity memory", e);
             return [];
         }
     },

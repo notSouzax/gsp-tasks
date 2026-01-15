@@ -49,7 +49,9 @@ const Column = ({ column, tasks, onAdd, onTaskClick, onDelete, onUpdateTask, onM
                 // Header acts as drag handle via listeners below, no need for setNodeRef here
                 className={`
                     relative flex flex-col mb-2 rounded-xl transition-all duration-300 group
-                    ${column.isCollapsed ? 'bg-[#1e293b] p-2 items-center' : 'bg-[#1e293b] p-4 pb-3 shadow-sm'}
+                    ${column.isCollapsed
+                        ? 'bg-[var(--bg-secondary)] dark:bg-[#1e293b] p-2 items-center'
+                        : 'bg-[var(--bg-secondary)] dark:bg-[#1e293b] p-4 pb-3 shadow-[var(--shadow-md)]'}
                 `}
                 style={{
                     borderTop: `3px solid ${borderColor}`,
@@ -68,7 +70,7 @@ const Column = ({ column, tasks, onAdd, onTaskClick, onDelete, onUpdateTask, onM
                             >
                                 {columnTasks.length}
                             </div>
-                            <h2 className="font-bold text-slate-200 text-sm tracking-wide uppercase truncate" title={column.title}>{column.title}</h2>
+                            <h2 className="font-bold text-[var(--text-primary)] text-sm tracking-wide uppercase truncate" title={column.title}>{column.title}</h2>
                         </div>
                     )}
 
@@ -78,7 +80,7 @@ const Column = ({ column, tasks, onAdd, onTaskClick, onDelete, onUpdateTask, onM
                             <>
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onEditColumn(column); }}
-                                    className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded-md transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
+                                    className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)] dark:hover:bg-slate-700 rounded-md transition-all opacity-0 group-hover:opacity-100 cursor-pointer"
                                     onPointerDown={e => e.stopPropagation()}
                                     title="Configurar"
                                 >
@@ -88,7 +90,7 @@ const Column = ({ column, tasks, onAdd, onTaskClick, onDelete, onUpdateTask, onM
                                 {(column.default_reminder_enabled || tasks.some(t => t.reminder_enabled)) && (
                                     <button
                                         onClick={(e) => { e.stopPropagation(); onSort(column.id); }}
-                                        className={`p-1.5 rounded-md transition-all cursor-pointer ${column.cardConfig?.auto_sort || column.card_config?.auto_sort ? '' : 'text-slate-500 hover:text-indigo-400 hover:bg-slate-700 opacity-0 group-hover:opacity-100'}`}
+                                        className={`p-1.5 rounded-md transition-all cursor-pointer ${column.cardConfig?.auto_sort || column.card_config?.auto_sort ? '' : 'text-[var(--text-muted)] hover:text-indigo-500 hover:bg-[var(--bg-primary)] dark:hover:bg-slate-700 opacity-0 group-hover:opacity-100'}`}
                                         style={column.cardConfig?.auto_sort || column.card_config?.auto_sort ? { color: borderColor, backgroundColor: `${borderColor}1A` } : {}}
                                         title={column.cardConfig?.auto_sort || column.card_config?.auto_sort ? "Orden automático activado" : "Activar orden automático"}
                                         onPointerDown={e => e.stopPropagation()}
@@ -99,7 +101,7 @@ const Column = ({ column, tasks, onAdd, onTaskClick, onDelete, onUpdateTask, onM
 
                                 <button
                                     onClick={(e) => { e.stopPropagation(); onAdd(column.title); }}
-                                    className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded-md transition-all cursor-pointer"
+                                    className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)] dark:hover:bg-slate-700 rounded-md transition-all cursor-pointer"
                                     title="Añadir tarea rápida"
                                     onPointerDown={e => e.stopPropagation()}
                                 >
@@ -110,7 +112,7 @@ const Column = ({ column, tasks, onAdd, onTaskClick, onDelete, onUpdateTask, onM
 
                         <button
                             onClick={(e) => { e.stopPropagation(); toggleCollapse(); }}
-                            className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-700 rounded-md transition-all cursor-pointer"
+                            className="p-1.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-primary)] dark:hover:bg-slate-700 rounded-md transition-all cursor-pointer"
                             title={column.isCollapsed ? "Expandir columna" : "Minimizar columna"}
                             onPointerDown={e => e.stopPropagation()}
                         >
@@ -130,7 +132,7 @@ const Column = ({ column, tasks, onAdd, onTaskClick, onDelete, onUpdateTask, onM
                         </div>
                         {/* Vertical Title */}
                         <span
-                            className="font-bold text-xs uppercase tracking-widest text-slate-400 whitespace-nowrap"
+                            className="font-bold text-xs uppercase tracking-widest text-[var(--text-secondary)] whitespace-nowrap"
                             style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
                         >
                             {column.title}
@@ -144,20 +146,20 @@ const Column = ({ column, tasks, onAdd, onTaskClick, onDelete, onUpdateTask, onM
                 <div
                     className={`
                         flex-1 overflow-y-auto overflow-x-hidden p-2 flex flex-col gap-3 custom-scrollbar rounded-xl transition-colors duration-200
-                        ${isDragging ? 'bg-slate-800/30' : ''}
+                        ${isDragging ? 'bg-slate-200/30 dark:bg-slate-800/30' : ''}
                     `}
-                    style={{ minHeight: '100px' }} // Ensure droppable area exists even if empty
+                    style={{ minHeight: '100px' }}
                 >
                     <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
                         {columnTasks.length === 0 ? (
                             <div
-                                className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 hover:bg-slate-800/30 transition-all group/empty"
+                                className="flex flex-col items-center justify-center py-12 border-2 border-dashed border-[var(--border-default)] rounded-xl cursor-pointer hover:border-indigo-500/50 hover:bg-indigo-500/5 transition-all group/empty"
                                 onClick={() => onAdd(column.title)}
                             >
-                                <div className="text-slate-600 group-hover/empty:text-slate-500 transition-colors mb-2">
+                                <div className="text-[var(--text-muted)] group-hover/empty:text-indigo-500 transition-colors mb-2">
                                     <Icons.Plus size={24} />
                                 </div>
-                                <p className="text-xs font-medium text-slate-600 group-hover/empty:text-slate-500">Sin tareas</p>
+                                <p className="text-xs font-medium text-[var(--text-muted)] group-hover/empty:text-indigo-500">Sin tareas</p>
                             </div>
                         ) : (
                             columnTasks.map((task) => (

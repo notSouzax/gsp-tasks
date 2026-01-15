@@ -88,13 +88,13 @@ const TaskDetailModal = ({ task, columns, onClose, onUpdate, onDelete }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] flex items-center justify-center z-50 p-4 transition-all duration-300" onClick={onClose}>
+        <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-[2px] flex items-center justify-center z-50 p-4 transition-all duration-300" onClick={onClose}>
             <div
-                className="bg-[#0f172a] border border-slate-700/50 rounded-2xl w-full max-w-4xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden"
+                className="bg-[var(--bg-secondary)] dark:bg-[#0f172a] border border-[var(--border-default)] dark:border-slate-700/50 rounded-2xl w-full max-w-4xl shadow-[var(--shadow-xl)] flex flex-col max-h-[90vh] overflow-hidden"
                 onClick={e => e.stopPropagation()}
             >
                 {/* Header */}
-                <div className="p-6 border-b border-white/5 flex justify-between items-start bg-slate-900/50">
+                <div className="p-6 border-b border-[var(--border-subtle)] dark:border-white/5 flex justify-between items-start bg-stone-100/30 dark:bg-slate-900/50">
                     <div className="flex-1 mr-4">
                         <div className="flex items-center gap-3 mb-3">
                             {/* Status Badge */}
@@ -104,7 +104,7 @@ const TaskDetailModal = ({ task, columns, onClose, onUpdate, onDelete }) => {
                                         <select
                                             value={task.status}
                                             onChange={(e) => handleStatusChange(e.target.value)}
-                                            className="appearance-none bg-[#1e293b] hover:bg-[#253045] text-indigo-300 font-bold text-xs uppercase tracking-wider rounded-lg pl-3 pr-10 py-1.5 outline-none cursor-pointer transition-all border border-indigo-500/20 hover:border-indigo-500/40 focus:ring-2 focus:ring-indigo-500/50"
+                                            className="appearance-none bg-[var(--bg-elevated)] dark:bg-[#1e293b] hover:bg-stone-50 dark:hover:bg-[#253045] text-indigo-500 dark:text-indigo-300 font-bold text-xs uppercase tracking-wider rounded-lg pl-3 pr-10 py-1.5 outline-none cursor-pointer transition-all border border-indigo-500/20 hover:border-indigo-500/40 focus:ring-2 focus:ring-indigo-500/50"
                                         >
                                             {columns.map(c => <option key={c.id} value={c.title}>{c.title}</option>)}
                                         </select>
@@ -123,26 +123,26 @@ const TaskDetailModal = ({ task, columns, onClose, onUpdate, onDelete }) => {
                                 {formatDate(task.createdAt, true)}
                             </span>
                         </div>
-                        <h2 className="text-2xl font-bold text-white leading-tight">{task.title}</h2>
+                        <h2 className="text-2xl font-bold text-[var(--text-primary)] leading-tight">{task.title}</h2>
                     </div>
-                    <button onClick={onClose} className="text-slate-500 hover:text-white hover:bg-white/10 p-2 rounded-lg transition-all">
+                    <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-stone-100 dark:hover:bg-white/10 p-2 rounded-lg transition-all">
                         <Icons.X size={20} />
                     </button>
                 </div>
 
                 {/* Content Area */}
-                <div className="flex-1 overflow-y-auto p-0 flex flex-col md:flex-row custom-scrollbar bg-[#0f172a]">
+                <div className="flex-1 overflow-y-auto p-0 flex flex-col md:flex-row custom-scrollbar bg-[var(--bg-primary)]">
 
                     {/* Main Content (Left) */}
                     <div className="flex-1 p-6 md:p-8 md:pr-4 space-y-8">
                         {/* Description */}
                         <div>
                             <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                <h3 className="text-xs font-bold text-[var(--text-muted)] uppercase tracking-widest flex items-center gap-2">
                                     <Icons.Layout size={14} /> Descripción
                                 </h3>
                                 {!isEditingDesc ? (
-                                    <button onClick={() => setIsEditingDesc(true)} className="text-slate-500 hover:text-indigo-400 text-xs font-medium px-2 py-1 rounded hover:bg-indigo-500/10 transition-colors">Editar</button>
+                                    <button onClick={() => setIsEditingDesc(true)} className="text-[var(--text-muted)] hover:text-indigo-500 text-xs font-medium px-2 py-1 rounded hover:bg-indigo-500/10 transition-colors">Editar</button>
                                 ) : (
                                     <div className="flex gap-2">
                                         <button onClick={() => { onUpdate({ ...task, description: tempDesc }); setIsEditingDesc(false); }} className="text-xs bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 px-2 py-1 rounded font-medium transition-colors">Guardar</button>
@@ -155,11 +155,11 @@ const TaskDetailModal = ({ task, columns, onClose, onUpdate, onDelete }) => {
                                     value={tempDesc}
                                     onChange={(e) => setTempDesc(e.target.value)}
                                     placeholder="Añade una descripción detallada..."
-                                    className="w-full bg-[#1e293b] border border-slate-700/50 rounded-xl px-4 py-3 text-slate-200 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none transition-all h-40 resize-none custom-scrollbar text-sm leading-relaxed"
+                                    className="w-full bg-[var(--bg-elevated)] dark:bg-[#1e293b] border border-[var(--border-default)] dark:border-slate-700/50 rounded-xl px-4 py-3 text-[var(--text-primary)] dark:text-slate-200 focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none transition-all h-40 resize-none custom-scrollbar text-sm leading-relaxed"
                                     autoFocus
                                 />
                             ) : (
-                                <div className={`p-4 rounded-xl border ${task.description ? 'bg-[#1e293b]/30 border-slate-800' : 'bg-slate-900 border-dashed border-slate-800'} text-slate-300 text-sm leading-relaxed min-h-[80px] whitespace-pre-wrap`}>
+                                <div className={`p-4 rounded-xl border ${task.description ? 'bg-stone-100 dark:bg-[#1e293b]/30 border-[var(--border-subtle)] dark:border-slate-800' : 'bg-stone-50 dark:bg-slate-900 border-dashed border-[var(--border-default)] dark:border-slate-800'} text-[var(--text-secondary)] text-sm leading-relaxed min-h-[80px] whitespace-pre-wrap`}>
                                     <Linkify text={task.description || "Sin descripción."} />
                                 </div>
                             )}
@@ -179,16 +179,16 @@ const TaskDetailModal = ({ task, columns, onClose, onUpdate, onDelete }) => {
                                     </h3>
                                 </div>
 
-                                <div className="bg-[#1e293b]/30 rounded-xl border border-slate-800 p-1">
+                                <div className="bg-stone-100 dark:bg-[#1e293b]/30 rounded-xl border border-[var(--border-default)] dark:border-slate-800 p-1">
                                     <div className="space-y-0.5 p-1">
                                         {checklist.map(item => (
-                                            <div key={item.id} className="flex items-start gap-3 group hover:bg-[#1e293b] p-2 rounded-lg transition-colors cursor-pointer" onClick={() => handleToggleCheckItem(item.id)}>
+                                            <div key={item.id} className="flex items-start gap-3 group hover:bg-stone-50 dark:hover:bg-[#1e293b] p-2 rounded-lg transition-colors cursor-pointer" onClick={() => handleToggleCheckItem(item.id)}>
                                                 <div
                                                     className={`mt-0.5 flex-shrink-0 transition-transform duration-200 ${item.completed ? 'text-emerald-400 scale-110' : 'text-slate-600 group-hover:text-indigo-400'}`}
                                                 >
                                                     {item.completed ? <Icons.CheckSquare size={16} /> : <Icons.Square size={16} />}
                                                 </div>
-                                                <span className={`flex-1 text-sm transition-colors ${item.completed ? 'text-slate-500 line-through decoration-slate-600' : 'text-slate-200'}`}>
+                                                <span className={`flex-1 text-sm transition-colors ${item.completed ? 'text-[var(--text-muted)] line-through decoration-[var(--text-muted)]' : 'text-[var(--text-primary)]'}`}>
                                                     {item.text}
                                                 </span>
                                                 <button
@@ -210,7 +210,7 @@ const TaskDetailModal = ({ task, columns, onClose, onUpdate, onDelete }) => {
                                                 onChange={(e) => setNewItemText(e.target.value)}
                                                 onKeyDown={(e) => { if (e.key === 'Enter') handleAddCheckItem(); }}
                                                 placeholder="Añadir elemento..."
-                                                className="w-full bg-[#0f172a] border border-slate-700/50 rounded-lg pl-9 pr-4 py-2.5 text-sm text-white focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 outline-none transition-all placeholder-slate-600"
+                                                className="w-full bg-[var(--bg-primary)] border border-[var(--border-default)] dark:border-slate-700/50 rounded-lg pl-9 pr-4 py-2.5 text-sm text-[var(--text-primary)] focus:ring-1 focus:ring-indigo-500/50 focus:border-indigo-500/50 outline-none transition-all placeholder-[var(--text-muted)]"
                                             />
                                             <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">
                                                 <Icons.Plus size={16} />
@@ -258,7 +258,7 @@ const TaskDetailModal = ({ task, columns, onClose, onUpdate, onDelete }) => {
                                                         <textarea
                                                             value={editingCommentText}
                                                             onChange={(e) => setEditingCommentText(e.target.value)}
-                                                            className="w-full bg-[#1e293b] border border-indigo-500/50 rounded-xl p-3 text-sm text-slate-300 focus:outline-none min-h-[80px]"
+                                                            className="w-full bg-[var(--bg-elevated)] dark:bg-[#1e293b] border border-indigo-500/50 rounded-xl p-3 text-sm text-[var(--text-primary)] dark:text-slate-300 focus:outline-none min-h-[80px]"
                                                             autoFocus
                                                         />
                                                         <div className="flex justify-end gap-2 absolute bottom-2 right-2">
@@ -267,7 +267,7 @@ const TaskDetailModal = ({ task, columns, onClose, onUpdate, onDelete }) => {
                                                         </div>
                                                     </div>
                                                 ) : (
-                                                    <div className="relative bg-[#1e293b] p-3.5 rounded-2xl rounded-tl-none border border-slate-800 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap shadow-sm group-hover:border-slate-700 transition-colors">
+                                                    <div className="relative bg-stone-100 dark:bg-[#1e293b] p-3.5 rounded-2xl rounded-tl-none border border-[var(--border-default)] dark:border-slate-800 text-[var(--text-secondary)] text-sm leading-relaxed whitespace-pre-wrap shadow-sm group-hover:border-[var(--border-strong)] dark:group-hover:border-slate-700 transition-colors">
                                                         <Linkify text={comment.text} />
                                                     </div>
                                                 )}
@@ -279,13 +279,13 @@ const TaskDetailModal = ({ task, columns, onClose, onUpdate, onDelete }) => {
                                 {/* Comment Input */}
                                 <div className="relative group/input">
                                     <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-xl blur opacity-0 group-focus-within/input:opacity-100 transition-opacity duration-500"></div>
-                                    <div className="relative flex items-end gap-2 bg-[#1e293b] p-2 rounded-xl border border-slate-700 focus-within:border-indigo-500/50 transition-colors">
+                                    <div className="relative flex items-end gap-2 bg-[var(--bg-elevated)] dark:bg-[#1e293b] p-2 rounded-xl border border-[var(--border-default)] dark:border-slate-700 focus-within:border-indigo-500/50 transition-colors">
                                         <textarea
                                             value={commentText}
                                             onChange={(e) => setCommentText(e.target.value)}
                                             onKeyDown={handleKeyDown}
                                             placeholder="Escribe un comentario..."
-                                            className="w-full bg-transparent border-none text-white placeholder-slate-500 focus:ring-0 outline-none text-sm resize-none custom-scrollbar min-h-[40px] max-h-[120px] py-2 px-1"
+                                            className="w-full bg-transparent border-none text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-0 outline-none text-sm resize-none custom-scrollbar min-h-[40px] max-h-[120px] py-2 px-1"
                                             style={{ height: Math.max(40, Math.min(120, commentText.split('\n').length * 20)) + 'px' }}
                                         />
                                         <button
