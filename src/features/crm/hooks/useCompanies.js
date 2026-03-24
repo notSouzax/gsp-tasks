@@ -1,86 +1,73 @@
-import { useState, useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabaseClient';
 
 /**
- * Hook para gestionar compañías del CRM
+ * Hook para gestionar compañías del CRM con React Query
  * @param {Object} currentUser - Usuario autenticado
- * @returns {Object} Estado y operaciones de compañías
  */
 export const useCompanies = (currentUser) => {
-    const [companies, setCompanies] = useState([]);
+    const queryClient = useQueryClient();
+    const userId = currentUser?.id;
 
-    const fetchCompanies = useCallback(async () => {
-        if (!currentUser) return;
+    const { data: companies = [], isLoading, error } = useQuery({
+        queryKey: ['crm', 'companies', userId],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('crm_companies')
+                .select('*')
+                .eq('user_id', userId)
+                .order('name', { ascending: true });
+            if (error) throw error;
+            return data || [];
+        },
+        enabled: !!userId,
+        staleTime: 30_000,
+    });
 
-        const { data, error } = await supabase
-            .from('crm_companies')
-            .select('*')
-            .eq('user_id', currentUser.id)
-            .order('name', { ascending: true });
+    const createCompany = useMutation({
+        mutationFn: async (companyData) => {
+            const { data, error } = await supabase
+                .from('crm_companies')
+                .insert([{ ...companyData, user_id: userId }])
+                .select()
+                .single();
+            if (error) throw error;
+            return data;
+        },
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['crm', 'companies'] }),
+    });
 
-        if (error) {
-            console.error('Error fetching companies:', error);
-            return;
-        }
+    const updateCompany = useMutation({
+        mutationFn: async ({ id, updates }) => {
+            const { data, error } = await supabase
+                .from('crm_companies')
+                .update(updates)
+                .eq('id', id)
+                .select()
+                .single();
+            if (error) throw error;
+            return data;
+        },
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['crm', 'companies'] }),
+    });
 
-        setCompanies(data || []);
-    }, [currentUser]);
-
-    const createCompany = useCallback(async (companyData) => {
-        if (!currentUser) return null;
-
-        const { data, error } = await supabase
-            .from('crm_companies')
-            .insert([{ ...companyData, user_id: currentUser.id }])
-            .select()
-            .single();
-
-        if (error) {
-            console.error('Error creating company:', error);
-            throw error;
-        }
-
-        setCompanies(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
-        return data;
-    }, [currentUser]);
-
-    const updateCompany = useCallback(async (id, updates) => {
-        const { data, error } = await supabase
-            .from('crm_companies')
-            .update(updates)
-            .eq('id', id)
-            .select()
-            .single();
-
-        if (error) {
-            console.error('Error updating company:', error);
-            throw error;
-        }
-
-        setCompanies(prev => prev.map(c => c.id === id ? data : c));
-        return data;
-    }, []);
-
-    const deleteCompany = useCallback(async (id) => {
-        const { error } = await supabase
-            .from('crm_companies')
-            .delete()
-            .eq('id', id);
-
-        if (error) {
-            console.error('Error deleting company:', error);
-            throw error;
-        }
-
-        setCompanies(prev => prev.filter(c => c.id !== id));
-    }, []);
+    const deleteCompany = useMutation({
+        mutationFn: async (id) => {
+            const { error } = await supabase
+                .from('crm_companies')
+                .delete()
+                .eq('id', id);
+            if (error) throw error;
+        },
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['crm', 'companies'] }),
+    });
 
     return {
         companies,
-        setCompanies,
-        fetchCompanies,
-        createCompany,
-        updateCompany,
-        deleteCompany
+        isLoading,
+        error,
+        createCompany: (data) => createCompany.mutateAsync(data),
+        updateCompany: (id, updates) => updateCompany.mutateAsync({ id, updates }),
+        deleteCompany: (id) => deleteCompany.mutateAsync(id),
     };
 };

@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from './AuthContext';
 
 // Import modular hooks
@@ -23,15 +24,12 @@ export const useCRM = () => {
 
 export const CRMProvider = ({ children }) => {
     const { currentUser } = useAuth();
-
-    // Loading & Error state
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const queryClient = useQueryClient();
 
     // Tags state (simple, no need for separate hook)
-    const [tags, setTags] = useState([]);
+    const [tags, setTags] = React.useState([]);
 
-    // Compose modular hooks
+    // Compose modular hooks (now powered by React Query)
     const pipelinesHook = usePipelines(currentUser);
     const contactsHook = useContacts(currentUser);
     const companiesHook = useCompanies(currentUser);
@@ -49,52 +47,18 @@ export const CRMProvider = ({ children }) => {
         activitiesHook.activities
     );
 
-    // Setup realtime subscriptions
-    useCRMRealtime(currentUser, {
-        setPipelines: pipelinesHook.setPipelines,
-        setStages: pipelinesHook.setStages,
-        setContacts: contactsHook.setContacts,
-        setCompanies: companiesHook.setCompanies,
-        setOpportunities: opportunitiesHook.setOpportunities,
-        setActivities: activitiesHook.setActivities,
-    });
+    // Setup realtime subscriptions (now just invalidates queries)
+    useCRMRealtime(currentUser);
 
-    // Refresh all data
-    const refreshAll = async () => {
-        setLoading(true);
-        try {
-            await Promise.all([
-                pipelinesHook.fetchPipelines(),
-                pipelinesHook.fetchStages(),
-                contactsHook.fetchContacts(),
-                companiesHook.fetchCompanies(),
-                opportunitiesHook.fetchOpportunities(),
-                activitiesHook.fetchActivities(),
-            ]);
-        } catch (err) {
-            setError(err.message);
-        }
-        setLoading(false);
+    // Refresh all — invalidates all CRM queries
+    const refreshAll = () => {
+        queryClient.invalidateQueries({ queryKey: ['crm'] });
     };
 
-    // Initial fetch - only when user changes
-    useEffect(() => {
-        if (currentUser) {
-            refreshAll();
-        } else {
-            // Reset all state when user logs out
-            pipelinesHook.setPipelines([]);
-            pipelinesHook.setStages([]);
-            pipelinesHook.setActivePipelineId(null);
-            contactsHook.setContacts([]);
-            companiesHook.setCompanies([]);
-            opportunitiesHook.setOpportunities([]);
-            activitiesHook.setActivities([]);
-            setTags([]);
-            setLoading(false);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentUser?.id]);
+    // Derive loading from individual hooks
+    const loading = pipelinesHook.isLoading || contactsHook.isLoading ||
+        companiesHook.isLoading || opportunitiesHook.isLoading ||
+        activitiesHook.isLoading;
 
     // Compose the value object (maintaining backwards compatibility)
     const value = {
@@ -110,7 +74,7 @@ export const CRMProvider = ({ children }) => {
         activePipeline: pipelinesHook.activePipeline,
         activeStages: pipelinesHook.activeStages,
         loading,
-        error,
+        error: null,
 
         // Setters
         setActivePipelineId: pipelinesHook.setActivePipelineId,

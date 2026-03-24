@@ -13,36 +13,33 @@ const SettingsModal = ({ onClose }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-[var(--bg-secondary)] border border-[var(--border-color)] w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
+        <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-[2px] flex items-center justify-center z-50 p-4 transition-all duration-300" onClick={onClose}>
+            <div
+                className="bg-[var(--bg-secondary)] dark:bg-[#0f172a] border border-[var(--border-default)] dark:border-slate-700/50 w-full max-w-2xl rounded-2xl shadow-[var(--shadow-xl)] flex flex-col max-h-[90vh] overflow-hidden transform transition-all scale-100"
+                onClick={e => e.stopPropagation()}
+            >
 
                 {/* Header */}
-                <div className="p-6 border-b border-[var(--border-color)] flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400">
-                            <Icons.Settings />
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-[var(--text-primary)]">Configuración</h2>
-                            <p className="text-sm text-[var(--text-secondary)]">Personaliza tu experiencia</p>
-                        </div>
-                    </div>
-                    <button onClick={onClose} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors">
-                        <Icons.X />
-                    </button>
+                <div className="bg-stone-100/30 dark:bg-slate-900/50 p-6 pb-4 border-b border-[var(--border-subtle)] dark:border-white/5">
+                    <h2 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
+                        <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
+                            Configuración
+                        </span>
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-0.5">Personaliza tu experiencia</p>
                 </div>
 
                 {/* Tabs */}
-                <div className="flex border-b border-[var(--border-color)] px-6 gap-6">
+                <div className="flex border-b border-[var(--border-subtle)] dark:border-white/5 px-6 gap-6">
                     <button
                         onClick={() => setActiveTab('visual')}
-                        className={`py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'visual' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                        className={`py-3.5 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${activeTab === 'visual' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-500 hover:text-[var(--text-primary)]'}`}
                     >
                         Visual y Diseño
                     </button>
                     <button
                         onClick={() => setActiveTab('defaults')}
-                        className={`py-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'defaults' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'}`}
+                        className={`py-3.5 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${activeTab === 'defaults' ? 'border-indigo-500 text-indigo-400' : 'border-transparent text-slate-500 hover:text-[var(--text-primary)]'}`}
                     >
                         Preferencias
                     </button>
@@ -55,38 +52,35 @@ const SettingsModal = ({ onClose }) => {
                         <div className="space-y-8">
                             {/* Theme */}
                             <section>
-                                <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Tema</h3>
+                                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-4">Tema</h3>
                                 <div className="grid grid-cols-2 gap-4">
                                     <button
                                         onClick={() => updateSettings({ theme: 'dark' })}
-                                        className={`p-4 rounded-xl border-2 flex flex-col items-center gap-3 transition-all ${settings.theme === 'dark' ? 'border-indigo-500 bg-indigo-500/5' : 'border-[var(--border-color)] hover:border-[var(--text-secondary)]'}`}
+                                        className={`p-4 rounded-xl border-2 flex flex-col items-center gap-3 transition-all ${settings.theme === 'dark' ? 'border-indigo-500 bg-indigo-500/5' : 'border-[var(--border-default)] dark:border-slate-700 hover:border-slate-500'}`}
                                     >
                                         <div className="w-full h-20 bg-slate-900 rounded-lg border border-slate-700 shadow-inner flex items-center justify-center">
                                             <div className="w-8 h-8 rounded-full bg-indigo-500 shadow-lg shadow-indigo-500/50"></div>
                                         </div>
-                                        <span className={`font-medium ${settings.theme === 'dark' ? 'text-indigo-400' : 'text-[var(--text-secondary)]'}`}>Modo Oscuro</span>
+                                        <span className={`text-xs font-bold uppercase tracking-wider ${settings.theme === 'dark' ? 'text-indigo-400' : 'text-slate-500'}`}>Modo Oscuro</span>
                                     </button>
                                     <button
                                         onClick={() => updateSettings({ theme: 'light' })}
-                                        className={`p-4 rounded-xl border-2 flex flex-col items-center gap-3 transition-all ${settings.theme === 'light' ? 'border-indigo-500 bg-indigo-500/5' : 'border-[var(--border-color)] hover:border-[var(--text-secondary)]'}`}
+                                        className={`p-4 rounded-xl border-2 flex flex-col items-center gap-3 transition-all ${settings.theme === 'light' ? 'border-indigo-500 bg-indigo-500/5' : 'border-[var(--border-default)] dark:border-slate-700 hover:border-slate-500'}`}
                                     >
                                         <div className="w-full h-20 bg-gray-50 rounded-lg border border-gray-200 shadow-inner flex items-center justify-center">
                                             <div className="w-8 h-8 rounded-full bg-indigo-500 shadow-lg shadow-indigo-500/20"></div>
                                         </div>
-                                        <span className={`font-medium ${settings.theme === 'light' ? 'text-indigo-400' : 'text-[var(--text-secondary)]'}`}>Modo Claro</span>
+                                        <span className={`text-xs font-bold uppercase tracking-wider ${settings.theme === 'light' ? 'text-indigo-400' : 'text-slate-500'}`}>Modo Claro</span>
                                     </button>
                                 </div>
                             </section>
-
-                            {/* Density */}
-
 
                             {/* Sliders */}
                             <section className="space-y-6">
                                 <div>
                                     <div className="flex justify-between mb-2">
-                                        <label className="text-sm font-medium text-[var(--text-primary)]">Ancho de Columna</label>
-                                        <span className="text-xs text-[var(--text-secondary)]">{settings.columnWidth}px</span>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ancho de Columna</label>
+                                        <span className="text-[10px] text-slate-500 font-mono">{settings.columnWidth}px</span>
                                     </div>
                                     <input
                                         type="range"
@@ -94,7 +88,7 @@ const SettingsModal = ({ onClose }) => {
                                         max="500"
                                         value={settings.columnWidth}
                                         onChange={(e) => updateSettings({ columnWidth: parseInt(e.target.value) })}
-                                        className="w-full h-2 bg-[var(--bg-primary)] rounded-lg appearance-none cursor-pointer accent-indigo-500"
+                                        className="w-full h-2 bg-[var(--bg-elevated)] dark:bg-[#1e293b] rounded-lg appearance-none cursor-pointer accent-indigo-500"
                                     />
                                 </div>
 
@@ -105,11 +99,11 @@ const SettingsModal = ({ onClose }) => {
                     {activeTab === 'defaults' && (
                         <div className="space-y-8">
                             <section>
-                                <h3 className="text-sm font-semibold text-[var(--text-secondary)] uppercase tracking-wider mb-4">Limpieza Automática</h3>
+                                <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-4">Limpieza Automática</h3>
                                 <div className="flex items-center gap-4">
                                     <div className="flex-1">
-                                        <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">Archivar tareas completadas</label>
-                                        <p className="text-xs text-[var(--text-secondary)]">Ocultar tareas de la columna "Completado" después de cierto tiempo.</p>
+                                        <label className="block text-xs font-medium text-[var(--text-primary)] mb-1">Archivar tareas completadas</label>
+                                        <p className="text-[10px] text-slate-500">Ocultar tareas de la columna "Completado" después de cierto tiempo.</p>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <input
@@ -117,9 +111,9 @@ const SettingsModal = ({ onClose }) => {
                                             min="0"
                                             value={settings.autoArchiveHours}
                                             onChange={(e) => updateSettings({ autoArchiveHours: parseInt(e.target.value) })}
-                                            className="w-20 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded px-2 py-1 text-sm text-[var(--text-primary)] outline-none focus:border-indigo-500"
+                                            className="w-20 bg-[var(--bg-elevated)] dark:bg-[#1e293b] border border-[var(--border-default)] dark:border-slate-700 rounded-lg px-2 py-1.5 text-sm text-[var(--text-primary)] outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all"
                                         />
-                                        <span className="text-sm text-[var(--text-secondary)]">horas</span>
+                                        <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider">horas</span>
                                     </div>
                                 </div>
                             </section>
@@ -129,16 +123,16 @@ const SettingsModal = ({ onClose }) => {
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-[var(--border-color)] flex justify-between items-center bg-[var(--bg-primary)]/30">
+                <div className="p-6 pt-4 border-t border-[var(--border-subtle)] dark:border-white/5 flex justify-between items-center">
                     <button
                         onClick={handleReset}
-                        className="text-xs text-red-400 hover:text-red-300 hover:underline"
+                        className="text-[10px] text-red-400 hover:text-red-300 hover:underline font-bold uppercase tracking-wider transition-colors"
                     >
                         Restablecer valores predeterminados
                     </button>
                     <button
                         onClick={onClose}
-                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition-colors"
+                        className="px-6 py-2.5 text-sm font-bold bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-xl shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all transform hover:-translate-y-0.5"
                     >
                         Listo
                     </button>

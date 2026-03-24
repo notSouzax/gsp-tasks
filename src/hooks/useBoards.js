@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { supabase } from '../lib/supabaseClient';
 import logger from '../utils/logger';
@@ -27,6 +27,10 @@ export function useBoards(currentUser, currentWorkspace, workspaceLoading) {
     const [boardToDelete, setBoardToDelete] = useState(null);
     const [isLoading, setIsLoading] = useState(true);
 
+    // Stable ref for currentUser so callbacks don't need it in deps
+    const currentUserRef = useRef(currentUser);
+    currentUserRef.current = currentUser;
+
     // Derived state: active board object
     const activeBoard = useMemo(() =>
         boards.find(b => b.id === activeBoardId) || boards[0],
@@ -41,7 +45,8 @@ export function useBoards(currentUser, currentWorkspace, workspaceLoading) {
      * Fetch all boards for the current user with nested columns, tasks, and comments
      */
     const fetchBoards = useCallback(async () => {
-        if (!currentUser) {
+        const user = currentUserRef.current;
+        if (!user) {
             setBoards([]);
             setActiveBoardId(null);
             setIsLoading(false);
@@ -49,7 +54,7 @@ export function useBoards(currentUser, currentWorkspace, workspaceLoading) {
         }
 
         setIsLoading(true);
-        logger.debug('useBoards', 'Fetching boards for user:', currentUser.id);
+        logger.debug('useBoards', 'Fetching boards for user:', user.id);
 
         try {
             let { data: userBoards, error } = await supabase
@@ -64,7 +69,7 @@ export function useBoards(currentUser, currentWorkspace, workspaceLoading) {
                         )
                     )
                 `)
-                .eq('user_id', currentUser.id)
+                .eq('user_id', currentUserRef.current.id)
                 .order('order', { ascending: true, nullsFirst: false })
                 .order('created_at', { ascending: true });
 
@@ -102,9 +107,12 @@ export function useBoards(currentUser, currentWorkspace, workspaceLoading) {
                 setBoards(userBoards);
 
                 // Restore saved active board preference
-                const savedActive = localStorage.getItem(`kanban-active-board-${currentUser.id}`);
-                if (savedActive && userBoards.find(b => b.id.toString() === savedActive)) {
-                    setActiveBoardId(savedActive);
+                // IMPORTANT: localStorage returns strings, but board IDs are numbers.
+                // Must parseInt to avoid strict equality mismatch (30 === "30" is false)
+                const savedActive = localStorage.getItem(`kanban-active-board-${currentUserRef.current.id}`);
+                const savedActiveId = savedActive ? parseInt(savedActive, 10) : null;
+                if (savedActiveId && userBoards.find(b => b.id === savedActiveId)) {
+                    setActiveBoardId(savedActiveId);
                 } else {
                     setActiveBoardId(userBoards[0].id);
                 }
@@ -115,13 +123,14 @@ export function useBoards(currentUser, currentWorkspace, workspaceLoading) {
         } finally {
             setIsLoading(false);
         }
-    }, [currentUser]);
+    }, []); // No deps — uses currentUserRef
 
-    // Fetch boards when user or workspace changes
+    // Fetch boards when user ID changes (not on every object identity change)
+    const userId = currentUser?.id;
     useEffect(() => {
         if (workspaceLoading) return;
         fetchBoards();
-    }, [currentUser, workspaceLoading, fetchBoards]);
+    }, [userId, workspaceLoading, fetchBoards]);
 
     // Persist active board preference
     useEffect(() => {
@@ -138,7 +147,7 @@ export function useBoards(currentUser, currentWorkspace, workspaceLoading) {
      * Create a new board with default columns
      */
     const handleCreateBoard = useCallback(async (title) => {
-        if (!currentUser) return null;
+        if (!currentUserRef.current) return null;
 
         try {
             // 1. Create board linked to workspace
@@ -146,7 +155,7 @@ export function useBoards(currentUser, currentWorkspace, workspaceLoading) {
                 .from('boards')
                 .insert([{
                     title,
-                    user_id: currentUser.id,
+                    user_id: currentUserRef.current.id,
                     column_width: 365,
                     workspace_id: currentWorkspace?.id
                 }])
@@ -188,7 +197,7 @@ export function useBoards(currentUser, currentWorkspace, workspaceLoading) {
             toast.error('Error al crear el tablero');
             return null;
         }
-    }, [currentUser, currentWorkspace]);
+    }, [currentWorkspace]);
 
     /**
      * Update board settings (title, column width, etc.)
@@ -204,6 +213,8 @@ export function useBoards(currentUser, currentWorkspace, workspaceLoading) {
             delete dbUpdates.columnWidth;
         }
 
+        logger.debug('useBoards', 'Updating board settings:', { boardId, dbUpdates });
+
         const { error } = await supabase
             .from('boards')
             .update(dbUpdates)
@@ -212,6 +223,8 @@ export function useBoards(currentUser, currentWorkspace, workspaceLoading) {
         if (error) {
             logger.error('useBoards', 'Error updating board:', error);
             toast.error('Error al actualizar tablero');
+        } else {
+            logger.debug('useBoards', 'Board settings saved successfully');
         }
     }, []);
 
@@ -424,7 +437,7 @@ export function useBoards(currentUser, currentWorkspace, workspaceLoading) {
         }
 
         return insertedTask;
-    }, [currentUser, activeBoardId]);
+    }, [activeBoardId]);
 
     /**
      * Handle global task save (from CreateTaskModal)

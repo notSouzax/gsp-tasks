@@ -6,7 +6,9 @@ import { calculateNextNotification } from '../utils/helpers';
 import { AutomationEngine } from '../features/automations';
 import {
     DndContext,
-    closestCenter,
+    closestCorners,
+    pointerWithin,
+    rectIntersection,
     KeyboardSensor,
     PointerSensor,
     useSensor,
@@ -57,10 +59,22 @@ const createTypeAwareCollisionDetection = (activeDragType) => (args) => {
         return true;
     });
 
-    return closestCenter({
-        ...rest,
-        droppableContainers: filteredContainers,
-    });
+    const filteredArgs = { ...rest, droppableContainers: filteredContainers };
+
+    if (activeDragType === 'COLUMN') {
+        // For columns, closestCorners works well horizontally
+        return closestCorners(filteredArgs);
+    }
+
+    // For tasks: use pointerWithin first (most accurate — detects what the pointer
+    // is actually hovering over), then fall back to rectIntersection for edge cases
+    const pointerCollisions = pointerWithin(filteredArgs);
+    if (pointerCollisions.length > 0) {
+        return pointerCollisions;
+    }
+
+    // Fallback: rect intersection catches cases near column edges
+    return rectIntersection(filteredArgs);
 };
 
 const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }) => {
@@ -76,6 +90,7 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
     const [taskToDelete, setTaskToDelete] = useState(null);
     const [activeDragItem, setActiveDragItem] = useState(null);
     const [activeDragType, setActiveDragType] = useState(null); // 'COLUMN' or 'TASK'
+    const dragOriginContainerRef = useRef(null); // Tracks which column a task was in BEFORE handleDragOver moved it
     const hasScrolledRef = useRef(false);
 
     // Configure drag sensors
@@ -437,8 +452,12 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         if (String(id).startsWith('col-')) {
             setActiveDragType('COLUMN');
             setActiveDragItem(cols.find(c => 'col-' + c.id === id));
+            dragOriginContainerRef.current = null;
         } else {
             setActiveDragType('TASK');
+            // Record the ORIGINAL container BEFORE any handleDragOver moves it
+            const originContainer = cols.find(col => col.cards.find(t => 'task-' + t.id === id));
+            dragOriginContainerRef.current = originContainer ? 'col-' + originContainer.id : null;
             for (const col of cols) {
                 const task = col.cards.find(t => 'task-' + t.id === id);
                 if (task) {
@@ -472,7 +491,6 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
             const overIndex = overItems.findIndex(t => 'task-' + t.id === overId);
 
             let newIndex;
-            // ... (Rest of logic is fine)
             if (overId === overContainer) {
                 newIndex = overItems.length;
             } else {
@@ -485,9 +503,8 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
                 const modifier = isBelowOverItem ? 1 : 0;
                 newIndex = overIndex >= 0 ? overIndex + modifier : overItems.length;
             }
-            // ...
 
-            return prev.map((c) => {
+            const newState = prev.map((c) => {
                 if ('col-' + c.id === activeContainer) {
                     return { ...c, cards: activeItems.filter((t) => 'task-' + t.id !== active.id) };
                 }
@@ -502,6 +519,13 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
                 }
                 return c;
             });
+
+            // CRITICAL: Sync ref immediately so handleDragEnd reads the latest state.
+            // Without this, React's batched rendering means columnsRef is stale
+            // when handleDragEnd fires in the same event cycle.
+            columnsRef.current = newState;
+
+            return newState;
         });
     }, [activeDragType, findContainer]);
 
@@ -543,86 +567,125 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         }
 
         // Processing Task Drop
-        const activeContainer = findContainer(active.id);
+        // Use the ORIGINAL container from dragStart (before handleDragOver moved it)
+        // and the CURRENT container for the destination.
+        const originalContainer = dragOriginContainerRef.current;
+        const currentContainer = findContainer(active.id); // Where the task IS now (after handleDragOver)
         const overContainer = findContainer(over.id);
 
-        if (activeContainer && overContainer) {
-            // Find cols from CURRENT state 'cols' (Ref)
-            const activeCol = cols.find(c => 'col-' + c.id === activeContainer);
+        // Reset origin ref
+        dragOriginContainerRef.current = null;
+
+        // Determine if this was a cross-column move by comparing the ORIGINAL
+        // container (before handleDragOver) with the current destination.
+        const wasCrossColumn = originalContainer && originalContainer !== currentContainer;
+
+
+        if (currentContainer && overContainer) {
+            const activeCol = cols.find(c => 'col-' + c.id === currentContainer);
             const overCol = cols.find(c => 'col-' + c.id === overContainer);
 
             // Safety check
             if (!activeCol || !overCol) return;
 
-            // Fetch final column from state
-            let finalColumn = cols.find(c => c.cards.some(t => 'task-' + t.id === active.id));
-            if (!finalColumn) return;
-
-            const newCards = [...finalColumn.cards];
-
-            if (activeContainer === overContainer) {
-                // Internal reorder
-                const oldIdx = cols.find(c => 'col-' + c.id === activeContainer).cards.findIndex(t => 'task-' + t.id === active.id);
-                const newIdx = cols.find(c => 'col-' + c.id === overContainer).cards.findIndex(t => 'task-' + t.id === over.id);
-                if (oldIdx !== newIdx) {
-                    const sortedCards = arrayMove(newCards, oldIdx, newIdx);
-                    // Update state
-                    const newCols = cols.map(c => c.id === finalColumn.id ? { ...c, cards: sortedCards } : c);
+            if (!wasCrossColumn) {
+                // Internal reorder within same column
+                const col = cols.find(c => 'col-' + c.id === currentContainer);
+                if (!col) return;
+                const cards = [...col.cards];
+                const oldIdx = cards.findIndex(t => 'task-' + t.id === active.id);
+                const newIdx = cards.findIndex(t => 'task-' + t.id === over.id);
+                if (oldIdx !== -1 && newIdx !== -1 && oldIdx !== newIdx) {
+                    const sortedCards = arrayMove(cards, oldIdx, newIdx);
+                    const newCols = cols.map(c => c.id === col.id ? { ...c, cards: sortedCards } : c);
                     updateLocalColumns(newCols);
-                    // Update DB positions in parallel
-                    await Promise.all(sortedCards.map((card, i) =>
+                    // Update DB positions in parallel (best-effort — UI already updated optimistically)
+                    const reorderResults = await Promise.allSettled(sortedCards.map((card, i) =>
                         supabase.from('tasks').update({ position: i }).eq('id', card.id)
                     ));
+                    if (reorderResults.some(r => r.status === 'rejected' || r.value?.error)) {
+                        console.warn('[DND] Some reorder positions failed to save');
+                    }
                 }
             } else {
-                // Cross container logic (DB persistence of new state)
-                const task = finalColumn.cards.find(t => 'task-' + t.id === active.id);
+                // Cross-column move: task was moved by handleDragOver, now persist to DB.
+                // The task is currently in currentContainer (the destination).
+                const targetColumn = cols.find(c => 'col-' + c.id === currentContainer);
+                if (!targetColumn) return;
+
+                // Find the task — it should be in targetColumn after handleDragOver moved it
+                let task = targetColumn.cards.find(t => 'task-' + t.id === active.id);
+                // Fallback: search all columns in case of timing edge case
+                if (!task) {
+                    for (const col of cols) {
+                        task = col.cards.find(t => 'task-' + t.id === active.id);
+                        if (task) break;
+                    }
+                }
+                if (!task) return;
+
+                // Calculate reminder for target column
                 let nextNotif = task.next_notification_at;
-                if (!task.reminder_enabled && finalColumn.default_reminder_enabled) {
-                    const nextTime = calculateNextNotification(finalColumn.default_reminder_value, finalColumn.default_reminder_unit);
+                if (!task.reminder_enabled && targetColumn.default_reminder_enabled) {
+                    const nextTime = calculateNextNotification(targetColumn.default_reminder_value, targetColumn.default_reminder_unit);
                     nextNotif = nextTime ? new Date(nextTime).toISOString() : null;
-                } else if (!task.reminder_enabled && !finalColumn.default_reminder_enabled) {
+                } else if (!task.reminder_enabled && !targetColumn.default_reminder_enabled) {
                     nextNotif = null;
                 }
 
-                await supabase.from('tasks').update({
-                    column_id: finalColumn.id,
-                    position: finalColumn.cards.findIndex(t => t.id === task.id),
+                // Persist task to TARGET column
+                const taskPosition = targetColumn.cards.findIndex(t => t.id === task.id);
+                const { error: updateError } = await supabase.from('tasks').update({
+                    column_id: targetColumn.id,
+                    position: taskPosition >= 0 ? taskPosition : 0,
                     next_notification_at: nextNotif
                 }).eq('id', task.id);
 
-                // Update all positions in parallel
-                await Promise.all(finalColumn.cards.map((card, i) =>
+                if (updateError) {
+                    console.error('[DND] Failed to persist cross-column move:', updateError);
+                    toast.error('No se pudo guardar el movimiento. Recarga si el problema persiste.');
+                    // Don't return — keep optimistic UI; positions will self-heal on next load
+                }
+
+                // Update all positions in target column in parallel (best-effort)
+                const posResults = await Promise.allSettled(targetColumn.cards.map((card, i) =>
                     supabase.from('tasks').update({ position: i }).eq('id', card.id)
                 ));
+                const posErrors = posResults.filter(r => r.status === 'rejected' || r.value?.error);
+                if (posErrors.length > 0) {
+                    console.warn('[DND] Some position updates failed (non-critical):', posErrors.length);
+                }
 
-                if (finalColumn.card_config?.auto_sort) {
-                    handleToggleSort(finalColumn.id, true);
+                if (targetColumn.card_config?.auto_sort) {
+                    handleToggleSort(targetColumn.id, true);
                 }
 
                 // 🤖 AUTOMATION: Disparar triggers de movimiento
-                const fromCol = cols.find(c => 'col-' + c.id === activeContainer);
+                const fromCol = cols.find(c => 'col-' + c.id === originalContainer);
                 AutomationEngine.trigger('task.moved', {
                     task,
                     fromColumn: fromCol,
-                    toColumn: finalColumn,
+                    toColumn: targetColumn,
                     columns: cols,
                     userId: currentUser?.id
                 });
                 AutomationEngine.trigger('task.moved_to', {
                     task,
                     fromColumn: fromCol,
-                    toColumn: finalColumn,
+                    toColumn: targetColumn,
                     columns: cols,
                     userId: currentUser?.id
                 });
                 AutomationEngine.trigger('task.moved_from', {
                     task,
                     fromColumn: fromCol,
-                    toColumn: finalColumn,
+                    toColumn: targetColumn,
                     columns: cols,
                     userId: currentUser?.id
                 });
+
+                // Sync final state to parent (useBoards) so it reflects the cross-column move
+                updateLocalColumns(columnsRef.current);
             }
         }
     }, [activeDragType, findContainer, handleToggleSort, updateLocalColumns, currentUser?.id]);

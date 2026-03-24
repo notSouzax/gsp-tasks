@@ -1,12 +1,12 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isToday, addDays, subDays, startOfWeek, endOfWeek, parseISO, startOfDay, isSameDay, endOfDay, addWeeks, subWeeks } from 'date-fns';
+﻿import React, { useState } from 'react';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isToday, addDays, subDays, startOfWeek, endOfWeek, parseISO, startOfDay, isSameDay, addWeeks, subWeeks } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DndContext, useDraggable, useDroppable, PointerSensor, useSensor, useSensors, DragOverlay } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
 import ConfirmationModal from './modals/ConfirmationModal';
 import EventModal, { EVENT_COLORS } from './modals/EventModal';
-import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../context/AuthContext';
+import { useCalendarQueries } from '../hooks/useCalendarQueries';
 import toast from 'react-hot-toast';
 
 const MiniCalendar = ({ currentReferenceDate, onDateSelect }) => {
@@ -172,16 +172,18 @@ const DroppableSlot = ({ day, hour, minutes, onClick }) => {
 
 const Calendar = () => {
     const { currentUser: user } = useAuth();
-    const [view, setView] = useState('month'); // 'month', 'week', 'day'
+    const [view, setView] = useState('month');
     const [currentDate, setCurrentDate] = useState(new Date());
-    const [events, setEvents] = useState([]);
-    const [crmActivities, setCrmActivities] = useState([]);
-    const [crmOpportunities, setCrmOpportunities] = useState([]);
-    // eslint-disable-next-line no-unused-vars
+
+    // React Query hook for all calendar data
+    const {
+        events, tags, integrations, crmActivities, crmOpportunities,
+        loading, addTag, updateTag, deleteTag: deleteTagMut,
+        updateIntegration: updateIntegrationMut, moveEvent, invalidateEvents
+    } = useCalendarQueries(user, currentDate, view);
+
     const [showCRMActivities, setShowCRMActivities] = useState(true);
-    // eslint-disable-next-line no-unused-vars
     const [showCRMOpportunities, setShowCRMOpportunities] = useState(true);
-    const [loading, setLoading] = useState(true);
     const [showEventModal, setShowEventModal] = useState(false);
     const [selectedDate, setSelectedDate] = useState(null);
     const [activeId, setActiveId] = useState(null);
@@ -190,210 +192,29 @@ const Calendar = () => {
     const [initialStartTime, setInitialStartTime] = useState('');
     const [initialEndTime, setInitialEndTime] = useState('');
     const [initialAllDay, setInitialAllDay] = useState(true);
-    const [tags, setTags] = useState([]);
     const [selectedTags, setSelectedTags] = useState([]);
     const [isAddingTag, setIsAddingTag] = useState(false);
     const [newTagName, setNewTagName] = useState('');
     const [newTagColor, setNewTagColor] = useState('blue');
     const [tagToDelete, setTagToDelete] = useState(null);
     const [showTagDeleteConfirm, setShowTagDeleteConfirm] = useState(false);
-    const [editingTag, setEditingTag] = useState(null); // { id, name, color }
-    const [integrations, setIntegrations] = useState([]); // [{id, slug, name, color, is_visible}]
+    const [editingTag, setEditingTag] = useState(null);
     const [editingIntegration, setEditingIntegration] = useState(null);
     const gridRef = React.useRef(null);
     const timeGridRef = React.useRef(null);
     const paginationTimer = React.useRef(null);
 
-    // Cargar eventos segÃºn la vista actual
-    const loadEvents = useCallback(async () => {
-        if (!user) {
-            setLoading(false);
-            return;
+    // Auto-select all tags on first load
+    React.useEffect(() => {
+        if (selectedTags.length === 0 && tags.length > 0) {
+            setSelectedTags(tags.map(t => t.id));
         }
-
-        try {
-            setLoading(true);
-            let start, end;
-
-            if (view === 'month') {
-                start = startOfMonth(currentDate);
-                end = endOfMonth(currentDate);
-            } else if (view === 'week') {
-                start = startOfWeek(currentDate, { weekStartsOn: 1 });
-                end = endOfWeek(currentDate, { weekStartsOn: 1 });
-            } else {
-                start = startOfDay(currentDate);
-                end = endOfDay(currentDate);
-            }
-
-            // Ampliar un poco el rango para seguridad
-            const dateStrStart = format(subDays(start, 2), 'yyyy-MM-dd');
-            const dateStrEnd = format(addDays(end, 2), 'yyyy-MM-dd');
-
-            const { data, error } = await supabase
-                .from('calendar_events')
-                .select('*')
-                .eq('user_id', user.id)
-                .gte('date', dateStrStart)
-                .lte('date', dateStrEnd)
-                .order('start_time');
-
-            if (error) throw error;
-            setEvents(data || []);
-        } catch (error) {
-            console.error('Error loading events:', error);
-            setEvents([]);
-        } finally {
-            setLoading(false);
-        }
-    }, [user, currentDate, view]);
-
-    const loadTags = useCallback(async () => {
-        if (!user) return;
-        try {
-            const { data, error } = await supabase
-                .from('calendar_tags')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('name');
-            if (error) throw error;
-            setTags(data || []);
-
-            // Si es la primera carga y no hay etiquetas seleccionadas, seleccionamos todas
-            if (selectedTags.length === 0 && data?.length > 0) {
-                setSelectedTags(data.map(t => t.id));
-            }
-        } catch (error) {
-            console.error('Error loading tags:', error);
-        }
-    }, [user, selectedTags.length]);
-
-    const loadIntegrations = useCallback(async () => {
-        if (!user) return;
-        try {
-            const { data, error } = await supabase
-                .from('calendar_integrations')
-                .select('*')
-                .eq('user_id', user.id);
-            if (error) throw error;
-            setIntegrations(data || []);
-        } catch (error) {
-            console.error('Error loading integrations:', error);
-        }
-    }, [user]);
-
-    // Load CRM Activities for calendar display
-    const loadCRMActivities = useCallback(async () => {
-        if (!user) return;
-        try {
-            let start, end;
-
-            if (view === 'month') {
-                start = startOfMonth(currentDate);
-                end = endOfMonth(currentDate);
-            } else if (view === 'week') {
-                start = startOfWeek(currentDate, { weekStartsOn: 1 });
-                end = endOfWeek(currentDate, { weekStartsOn: 1 });
-            } else {
-                start = startOfDay(currentDate);
-                end = endOfDay(currentDate);
-            }
-
-            const dateStrStart = format(subDays(start, 2), 'yyyy-MM-dd');
-            const dateStrEnd = format(addDays(end, 2), 'yyyy-MM-dd');
-
-            const { data, error } = await supabase
-                .from('crm_activities')
-                .select('*, contact:crm_contacts(first_name, last_name), opportunity:crm_opportunities(name)')
-                .eq('user_id', user.id)
-                .gte('due_date', dateStrStart)
-                .lte('due_date', dateStrEnd)
-                .eq('is_done', false)
-                .order('due_date');
-
-            if (error) {
-                console.log('CRM activities not found (may not exist yet):', error.message);
-                setCrmActivities([]);
-                return;
-            }
-
-            setCrmActivities(data || []);
-        } catch {
-            console.log('CRM integration not available');
-            setCrmActivities([]);
-        }
-    }, [user, currentDate, view]);
-
-    useEffect(() => {
-        loadEvents();
-        loadTags();
-        loadIntegrations();
-        loadCRMActivities();
-    }, [loadEvents, loadTags, loadIntegrations, loadCRMActivities]);
-
-    // Load CRM Opportunities for calendar display (expected_close_date)
-    const loadCRMOpportunities = useCallback(async () => {
-        if (!user) return;
-        try {
-            let start, end;
-
-            if (view === 'month') {
-                start = startOfMonth(currentDate);
-                end = endOfMonth(currentDate);
-            } else if (view === 'week') {
-                start = startOfWeek(currentDate, { weekStartsOn: 1 });
-                end = endOfWeek(currentDate, { weekStartsOn: 1 });
-            } else {
-                start = startOfDay(currentDate);
-                end = endOfDay(currentDate);
-            }
-
-            const dateStrStart = format(subDays(start, 2), 'yyyy-MM-dd');
-            const dateStrEnd = format(addDays(end, 2), 'yyyy-MM-dd');
-
-            const { data, error } = await supabase
-                .from('crm_opportunities')
-                .select('*, stage:crm_stages(name, color)')
-                .eq('user_id', user.id)
-                .gte('expected_close_date', dateStrStart)
-                .lte('expected_close_date', dateStrEnd)
-                .is('is_won', false)
-                .is('is_lost', false)
-                .order('expected_close_date');
-
-            if (error) {
-                console.log('CRM opportunities not found:', error.message);
-                setCrmOpportunities([]);
-                return;
-            }
-
-            setCrmOpportunities(data || []);
-        } catch {
-            console.log('CRM opportunities not available');
-            setCrmOpportunities([]);
-        }
-    }, [user, currentDate, view]);
-
-    useEffect(() => {
-        loadCRMOpportunities();
-    }, [loadCRMOpportunities]);
+    }, [tags, selectedTags.length]);
 
     const handleAddTag = async () => {
         if (!newTagName.trim() || !user) return;
         try {
-            const { data, error } = await supabase
-                .from('calendar_tags')
-                .insert([{
-                    user_id: user.id,
-                    name: newTagName.trim(),
-                    color: newTagColor
-                }])
-                .select()
-                .single();
-
-            if (error) throw error;
-
-            setTags(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)));
+            const data = await addTag(newTagName, newTagColor);
             setSelectedTags(prev => [...prev, data.id]);
             setNewTagName('');
             setIsAddingTag(false);
@@ -412,17 +233,9 @@ const Calendar = () => {
     const confirmDeleteTag = async () => {
         if (!tagToDelete) return;
         try {
-            const { error } = await supabase
-                .from('calendar_tags')
-                .delete()
-                .eq('id', tagToDelete);
-
-            if (error) throw error;
-
-            setTags(prev => prev.filter(t => t.id !== tagToDelete));
+            await deleteTagMut(tagToDelete);
             setSelectedTags(prev => prev.filter(tid => tid !== tagToDelete));
             toast.success('Etiqueta eliminada');
-            loadEvents();
         } catch (error) {
             console.error('Error deleting tag:', error);
             toast.error('Error al eliminar etiqueta');
@@ -435,20 +248,9 @@ const Calendar = () => {
     const handleUpdateTag = async () => {
         if (!editingTag || !editingTag.name.trim()) return;
         try {
-            const { error } = await supabase
-                .from('calendar_tags')
-                .update({
-                    name: editingTag.name.trim(),
-                    color: editingTag.color
-                })
-                .eq('id', editingTag.id);
-
-            if (error) throw error;
-
-            setTags(prev => prev.map(t => t.id === editingTag.id ? { ...t, ...editingTag } : t));
+            await updateTag(editingTag);
             setEditingTag(null);
             toast.success('Etiqueta actualizada');
-            loadEvents(); // Recargar para actualizar colores de eventos
         } catch (error) {
             console.error('Error updating tag:', error);
             toast.error('Error al actualizar etiqueta');
@@ -458,30 +260,12 @@ const Calendar = () => {
     const handleUpdateIntegration = async () => {
         if (!editingIntegration || !editingIntegration.name.trim()) return;
         try {
-            const { error } = await supabase
-                .from('calendar_integrations')
-                .upsert({
-                    user_id: user.id,
-                    slug: editingIntegration.slug,
-                    name: editingIntegration.name.trim(),
-                    color: editingIntegration.color,
-                    is_visible: editingIntegration.is_visible
-                }, { onConflict: 'user_id, slug' });
-
-            if (error) throw error;
-
-            setIntegrations(prev => {
-                const exists = prev.find(i => i.slug === editingIntegration.slug);
-                if (exists) {
-                    return prev.map(i => i.slug === editingIntegration.slug ? { ...i, ...editingIntegration } : i);
-                }
-                return [...prev, editingIntegration];
-            });
+            await updateIntegrationMut(editingIntegration);
             setEditingIntegration(null);
             toast.success('Integración actualizada');
         } catch (error) {
             console.error('Error updating integration:', error);
-            toast.error('Error al actualizar integraciÃ³n');
+            toast.error('Error al actualizar integración');
         }
     };
 
@@ -561,7 +345,6 @@ const Calendar = () => {
         if (!draggedEvent) return;
 
         if (targetId.startsWith('slot-')) {
-            // Drop en slot horario (Semana/DÃ­a)
             const parts = targetId.split('-');
             newDate = parts.slice(1, 4).join('-');
             const newHour = parseInt(parts[4]);
@@ -577,7 +360,6 @@ const Calendar = () => {
                 newEndTime = `${Math.floor(endTotalMinutes / 60).toString().padStart(2, '0')}:${(endTotalMinutes % 60).toString().padStart(2, '0')}`;
             }
         } else if (targetId.startsWith('day-')) {
-            // Drop en día (Mes o All-day)
             newDate = targetId.replace('day-', '');
             newStartTime = draggedEvent.start_time;
             newEndTime = draggedEvent.end_time;
@@ -585,31 +367,13 @@ const Calendar = () => {
             return;
         }
 
-        // Evitar update si no ha cambiado nada
         if (newDate === draggedEvent.date && newStartTime === draggedEvent.start_time) return;
 
-        // Actualización optimista
-        setEvents(prev => prev.map(e =>
-            e.id === eventId
-                ? { ...e, date: newDate, start_time: newStartTime, end_time: newEndTime }
-                : e
-        ));
-
         try {
-            const { error } = await supabase
-                .from('calendar_events')
-                .update({
-                    date: newDate,
-                    start_time: newStartTime,
-                    end_time: newEndTime
-                })
-                .eq('id', eventId);
-
-            if (error) throw error;
+            await moveEvent(eventId, newDate, newStartTime, newEndTime);
         } catch (err) {
             console.error('Error updating event drop:', err);
             toast.error('No se pudo mover el evento');
-            loadEvents();
         }
     };
 
@@ -749,7 +513,7 @@ const Calendar = () => {
     };
 
     // Auto-scroll to 8:00 AM on week/day view
-    useEffect(() => {
+    React.useEffect(() => {
         if (timeGridRef.current && (view === 'week' || view === 'day')) {
             // Cada hora tiene 96px (h-24). 8:00 AM = 8 * 96
             timeGridRef.current.scrollTop = 8 * 96;
@@ -1255,7 +1019,7 @@ const Calendar = () => {
                     date={selectedDate}
                     event={editingEvent}
                     onClose={() => { setShowEventModal(false); setEditingEvent(null); }}
-                    onSave={() => { loadEvents(); setShowEventModal(false); setEditingEvent(null); }}
+                    onSave={() => { invalidateEvents(); setShowEventModal(false); setEditingEvent(null); }}
                     userId={user?.id}
                     initialStartTime={initialStartTime}
                     initialEndTime={initialEndTime}

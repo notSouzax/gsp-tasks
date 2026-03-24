@@ -48,7 +48,7 @@ const Column = ({ column, tasks, onAdd, onTaskClick, onDelete, onUpdateTask, onM
             <div
                 // Header acts as drag handle via listeners below, no need for setNodeRef here
                 className={`
-                    relative flex flex-col mb-2 rounded-xl transition-all duration-300 group
+                    relative flex flex-col mb-2 rounded-xl transition-all duration-300 group flex-shrink-0
                     ${column.isCollapsed
                         ? 'bg-[var(--bg-secondary)] dark:bg-[#1e293b] p-2 items-center'
                         : 'bg-[var(--bg-secondary)] dark:bg-[#1e293b] p-4 pb-3 shadow-[var(--shadow-md)]'}

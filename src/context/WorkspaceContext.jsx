@@ -1,10 +1,38 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from './AuthContext';
 import { hasPermission, PERMISSIONS, WORKSPACE_ROLES } from '../utils/permissions';
 import logger from '../utils/logger';
 
 const WorkspaceContext = createContext();
+const WS_CACHE_KEY = 'gsp-cached-workspace';
+
+/** Cache workspace data for instant restore */
+const cacheWorkspace = (workspace, role, members) => {
+    try {
+        localStorage.setItem(WS_CACHE_KEY, JSON.stringify({
+            workspace, role, members: members || [],
+            ts: Date.now()
+        }));
+    } catch { /* ignore */ }
+};
+
+const getCachedWorkspace = () => {
+    try {
+        const raw = localStorage.getItem(WS_CACHE_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (Date.now() - parsed.ts > 24 * 60 * 60 * 1000) {
+            localStorage.removeItem(WS_CACHE_KEY);
+            return null;
+        }
+        return parsed;
+    } catch { return null; }
+};
+
+const clearCachedWorkspace = () => {
+    try { localStorage.removeItem(WS_CACHE_KEY); } catch { /* ignore */ }
+};
 
 export const useWorkspace = () => {
     const context = useContext(WorkspaceContext);
@@ -16,17 +44,19 @@ export const useWorkspace = () => {
 
 export const WorkspaceProvider = ({ children }) => {
     const { currentUser } = useAuth();
-    const [currentWorkspace, setCurrentWorkspace] = useState(null);
-    const [workspaceMembers, setWorkspaceMembers] = useState([]);
+    const cached = useRef(getCachedWorkspace());
+    const [currentWorkspace, setCurrentWorkspace] = useState(cached.current?.workspace || null);
+    const [workspaceMembers, setWorkspaceMembers] = useState(cached.current?.members || []);
     const [pendingInvitations, setPendingInvitations] = useState([]);
-    const [userRole, setUserRole] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [userRole, setUserRole] = useState(cached.current?.role || null);
+    const [loading, setLoading] = useState(!cached.current);
 
     // Fetch user's default workspace and their role
     const fetchWorkspace = useCallback(async () => {
         try {
             // If no user, just clear state and exit
             if (!currentUser) {
+                clearCachedWorkspace();
                 setCurrentWorkspace(null);
                 setUserRole(null);
                 return;
@@ -53,6 +83,7 @@ export const WorkspaceProvider = ({ children }) => {
                 const membership = memberships[0];
                 setCurrentWorkspace(membership.workspaces);
                 setUserRole(membership.role);
+                cacheWorkspace(membership.workspaces, membership.role, workspaceMembers);
             } else if (!memberError) {
                 // FAILSAFE: Auto-create workspace if none exists (only if no error above)
                 logger.info('WorkspaceContext', 'No workspace found, auto-creating one...');
@@ -95,6 +126,7 @@ export const WorkspaceProvider = ({ children }) => {
                     // 4. Set State
                     setCurrentWorkspace(newWorkspace);
                     setUserRole('owner');
+                    cacheWorkspace(newWorkspace, 'owner', []);
                 }
             }
         } catch (error) {
@@ -126,7 +158,12 @@ export const WorkspaceProvider = ({ children }) => {
 
             if (error) throw error;
 
-            setWorkspaceMembers(data || []);
+            const members = data || [];
+            setWorkspaceMembers(members);
+            // Update cache with fresh members
+            if (currentWorkspace && userRole) {
+                cacheWorkspace(currentWorkspace, userRole, members);
+            }
         } catch (error) {
             logger.error('Error fetching members:', error);
         }

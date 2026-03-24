@@ -50,46 +50,45 @@ const InviteMemberModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-[var(--bg-secondary)] rounded-2xl w-full max-w-md border border-[var(--border-color)] shadow-2xl">
+        <div className="fixed inset-0 bg-[var(--overlay-bg)] backdrop-blur-[2px] flex items-center justify-center z-50 p-4 transition-all duration-300" onClick={handleClose}>
+            <div
+                className="bg-[var(--bg-secondary)] dark:bg-[#0f172a] border border-[var(--border-default)] dark:border-slate-700/50 rounded-2xl w-full max-w-md shadow-[var(--shadow-xl)] overflow-hidden transform transition-all scale-100"
+                onClick={e => e.stopPropagation()}
+            >
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-[var(--border-color)]">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
-                            <Icons.UserPlus className="w-5 h-5 text-white" />
-                        </div>
-                        <h2 className="text-xl font-semibold text-[var(--text-primary)]">
+                <div className="bg-stone-100/30 dark:bg-slate-900/50 p-6 pb-4 border-b border-[var(--border-subtle)] dark:border-white/5">
+                    <h2 className="text-xl font-bold text-[var(--text-primary)] flex items-center gap-2">
+                        <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-cyan-400">
                             Invitar Miembro
-                        </h2>
-                    </div>
-                    <button
-                        onClick={handleClose}
-                        className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                    >
-                        <Icons.X className="w-5 h-5" />
-                    </button>
+                        </span>
+                    </h2>
                 </div>
 
                 {/* Content */}
-                <div className="p-6 space-y-6">
+                <div className="p-6 pt-4">
                     {!generatedCode ? (
                         <>
                             {/* Role Selection */}
-                            <div className="space-y-2">
-                                <label className="block text-sm font-medium text-[var(--text-primary)]">
+                            <div className="mb-5">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                                     Rol
                                 </label>
-                                <select
-                                    value={selectedRole}
-                                    onChange={(e) => setSelectedRole(e.target.value)}
-                                    className="w-full px-4 py-2.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                                    disabled={loading}
-                                >
-                                    <option value={WORKSPACE_ROLES.ADMIN}>{getRoleName(WORKSPACE_ROLES.ADMIN)}</option>
-                                    <option value={WORKSPACE_ROLES.MEMBER}>{getRoleName(WORKSPACE_ROLES.MEMBER)}</option>
-                                    <option value={WORKSPACE_ROLES.VIEWER}>{getRoleName(WORKSPACE_ROLES.VIEWER)}</option>
-                                </select>
-                                <p className="text-xs text-neutral-500">
+                                <div className="relative inline-block w-full">
+                                    <select
+                                        value={selectedRole}
+                                        onChange={(e) => setSelectedRole(e.target.value)}
+                                        className="w-full bg-[var(--bg-elevated)] dark:bg-[#1e293b] hover:bg-stone-50 dark:hover:bg-[#253045] border border-[var(--border-default)] dark:border-slate-700 rounded-lg pl-3 pr-10 py-3 text-[var(--text-primary)] dark:text-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none appearance-none transition-all cursor-pointer"
+                                        disabled={loading}
+                                    >
+                                        <option value={WORKSPACE_ROLES.ADMIN}>{getRoleName(WORKSPACE_ROLES.ADMIN)}</option>
+                                        <option value={WORKSPACE_ROLES.MEMBER}>{getRoleName(WORKSPACE_ROLES.MEMBER)}</option>
+                                        <option value={WORKSPACE_ROLES.VIEWER}>{getRoleName(WORKSPACE_ROLES.VIEWER)}</option>
+                                    </select>
+                                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                        <Icons.ChevronDown className="text-slate-400" size={14} />
+                                    </div>
+                                </div>
+                                <p className="text-[10px] text-slate-500 mt-1">
                                     {selectedRole === WORKSPACE_ROLES.ADMIN && 'Puede invitar y gestionar miembros'}
                                     {selectedRole === WORKSPACE_ROLES.MEMBER && 'Puede crear y editar tareas y boards'}
                                     {selectedRole === WORKSPACE_ROLES.VIEWER && 'Solo puede ver, no puede editar'}
@@ -97,8 +96,8 @@ const InviteMemberModal = ({ isOpen, onClose }) => {
                             </div>
 
                             {/* Max Uses */}
-                            <div className="space-y-2">
-                                <label className="block text-sm font-medium text-[var(--text-primary)]">
+                            <div className="mb-5">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                                     Usos permitidos
                                 </label>
                                 <input
@@ -107,46 +106,51 @@ const InviteMemberModal = ({ isOpen, onClose }) => {
                                     max="100"
                                     value={maxUses}
                                     onChange={(e) => setMaxUses(parseInt(e.target.value) || 1)}
-                                    className="w-full px-4 py-2.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                    className="w-full bg-[var(--bg-elevated)] dark:bg-[#1e293b] border border-[var(--border-default)] dark:border-slate-700 rounded-lg px-4 py-3 text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none transition-all"
                                     disabled={loading}
                                 />
-                                <p className="text-xs text-neutral-500">
+                                <p className="text-[10px] text-slate-500 mt-1">
                                     Número de personas que pueden usar este código
                                 </p>
                             </div>
 
                             {/* Expiration */}
-                            <div className="space-y-2">
-                                <label className="block text-sm font-medium text-[var(--text-primary)]">
+                            <div className="mb-5">
+                                <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                                     Expira en (días)
                                 </label>
-                                <select
-                                    value={expiresInDays}
-                                    onChange={(e) => setExpiresInDays(parseInt(e.target.value))}
-                                    className="w-full px-4 py-2.5 bg-[var(--bg-primary)] border border-[var(--border-color)] rounded-xl text-[var(--text-primary)] focus:outline-none focus:border-blue-500/50 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                                    disabled={loading}
-                                >
-                                    <option value={1}>1 día</option>
-                                    <option value={3}>3 días</option>
-                                    <option value={7}>7 días</option>
-                                    <option value={14}>14 días</option>
-                                    <option value={30}>30 días</option>
-                                </select>
+                                <div className="relative inline-block w-full">
+                                    <select
+                                        value={expiresInDays}
+                                        onChange={(e) => setExpiresInDays(parseInt(e.target.value))}
+                                        className="w-full bg-[var(--bg-elevated)] dark:bg-[#1e293b] hover:bg-stone-50 dark:hover:bg-[#253045] border border-[var(--border-default)] dark:border-slate-700 rounded-lg pl-3 pr-10 py-3 text-[var(--text-primary)] dark:text-slate-200 text-sm focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 outline-none appearance-none transition-all cursor-pointer"
+                                        disabled={loading}
+                                    >
+                                        <option value={1}>1 día</option>
+                                        <option value={3}>3 días</option>
+                                        <option value={7}>7 días</option>
+                                        <option value={14}>14 días</option>
+                                        <option value={30}>30 días</option>
+                                    </select>
+                                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                        <Icons.ChevronDown className="text-slate-400" size={14} />
+                                    </div>
+                                </div>
                             </div>
 
                             {error && (
-                                <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-start gap-2">
+                                <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg flex items-start gap-2">
                                     <Icons.AlertCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
                                     <p className="text-sm text-red-400">{error}</p>
                                 </div>
                             )}
 
                             {/* Actions */}
-                            <div className="flex gap-3 pt-2">
+                            <div className="flex justify-end gap-3 pt-2 border-t border-white/5">
                                 <button
                                     type="button"
                                     onClick={handleClose}
-                                    className="flex-1 px-4 py-2.5 bg-[var(--bg-primary)] hover:bg-stone-100 dark:hover:bg-white/5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-xl transition-colors"
+                                    className="px-5 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-stone-100 dark:hover:bg-white/5 rounded-xl transition-all"
                                     disabled={loading}
                                 >
                                     Cancelar
@@ -155,7 +159,7 @@ const InviteMemberModal = ({ isOpen, onClose }) => {
                                     type="button"
                                     onClick={handleGenerate}
                                     disabled={loading}
-                                    className="flex-1 px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white rounded-xl font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                                    className="px-6 py-2.5 text-sm font-bold bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 text-white rounded-xl shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all transform hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center gap-2"
                                 >
                                     {loading ? (
                                         <>
@@ -183,17 +187,17 @@ const InviteMemberModal = ({ isOpen, onClose }) => {
                                     <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-1">
                                         ¡Código Generado!
                                     </h3>
-                                    <p className="text-sm text-neutral-400">
+                                    <p className="text-sm text-slate-400">
                                         Comparte este código con la persona que quieres invitar
                                     </p>
                                 </div>
 
                                 {/* Code Display */}
-                                <div className="p-6 bg-[var(--bg-primary)] rounded-xl border border-[var(--border-color)]">
+                                <div className="p-6 bg-[var(--bg-elevated)] dark:bg-[#1e293b] rounded-xl border border-[var(--border-default)] dark:border-slate-700">
                                     <p className="text-3xl font-mono font-bold text-[var(--text-primary)] tracking-widest mb-2">
                                         {generatedCode.invitation_code}
                                     </p>
-                                    <p className="text-xs text-neutral-500">
+                                    <p className="text-[10px] text-slate-500">
                                         Expira: {new Date(generatedCode.expires_at).toLocaleDateString()} •
                                         {' '}Usos: 0/{generatedCode.max_uses}
                                     </p>
@@ -202,7 +206,7 @@ const InviteMemberModal = ({ isOpen, onClose }) => {
                                 {/* Copy Button */}
                                 <button
                                     onClick={handleCopyCode}
-                                    className="w-full px-4 py-2.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded-xl transition-all flex items-center justify-center gap-2"
+                                    className="w-full px-4 py-2.5 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/20 text-indigo-400 rounded-xl transition-all flex items-center justify-center gap-2"
                                 >
                                     {copied ? (
                                         <>
@@ -220,7 +224,7 @@ const InviteMemberModal = ({ isOpen, onClose }) => {
 
                             <button
                                 onClick={handleClose}
-                                className="w-full px-4 py-2.5 bg-[var(--bg-primary)] hover:bg-stone-100 dark:hover:bg-white/5 text-[var(--text-primary)] rounded-xl transition-colors"
+                                className="w-full mt-4 px-5 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-stone-100 dark:hover:bg-white/5 rounded-xl transition-all"
                             >
                                 Cerrar
                             </button>

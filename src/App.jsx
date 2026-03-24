@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import toast, { Toaster } from 'react-hot-toast';
-import { supabase } from './lib/supabaseClient';
 import logger from './utils/logger';
+import SplashScreen from './components/ui/SplashScreen';
 
 import { useVoiceInput } from './hooks/useVoiceInput';
 import { useBoards } from './hooks/useBoards';
@@ -146,12 +146,7 @@ const AppContent = () => {
   // LOADING STATES
   // =========================================================================
   if (workspaceLoading) {
-    return (
-      <div className="flex flex-col h-screen items-center justify-center bg-[var(--bg-primary)] text-[var(--text-secondary)] gap-4">
-        <div className="animate-pulse text-indigo-400">Iniciando Espacio de Trabajo...</div>
-        <div className="text-xs text-slate-500">Sincronizando permisos y configuración</div>
-      </div>
-    );
+    return <SplashScreen status="Cargando espacio de trabajo..." />;
   }
 
   if (!currentUser) {
@@ -161,36 +156,7 @@ const AppContent = () => {
 
   if (boardsLoading || !activeBoard) {
     logger.debug('AppContent', 'Loading boards or no active board. Boards count:', boards.length);
-    return (
-      <div className="flex flex-col h-screen items-center justify-center bg-[var(--bg-primary)] text-[var(--text-secondary)] gap-4">
-        <div className="animate-pulse">Cargando tus tableros...</div>
-        <div className="text-xs max-w-md text-center px-4">
-          Si esto tarda mucho, es posible que no tengas tableros o haya un error de conexión.
-          <br />UID: {currentUser?.id}
-          <br />WS: {currentWorkspace?.id}
-        </div>
-        <div className="flex gap-4">
-          <button
-            onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-          >
-            Recargar
-          </button>
-          <button
-            onClick={async () => { await supabase.auth.signOut(); window.location.reload(); }}
-            className="px-4 py-2 border border-red-500/50 text-red-400 rounded-lg hover:bg-red-500/10 transition-colors"
-          >
-            Cerrar Sesión
-          </button>
-          <button
-            onClick={() => handleCreateBoard("Tablero de Rescate")}
-            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-          >
-            Forzar Crear Tablero
-          </button>
-        </div>
-      </div>
-    );
+    return <SplashScreen status="Preparando tableros..." />;
   }
 
   // =========================================================================
