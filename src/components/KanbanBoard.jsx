@@ -42,40 +42,6 @@ const sortCardsByDate = (cards) => {
     });
 };
 
-// Custom collision detection that filters droppables by type
-// When dragging a COLUMN, only consider other COLUMNS as valid targets
-// When dragging a TASK, consider all targets (tasks and columns for cross-container)
-const createTypeAwareCollisionDetection = (activeDragType) => (args) => {
-    const { droppableContainers, ...rest } = args;
-
-    // Filter droppables based on what we're dragging
-    const filteredContainers = droppableContainers.filter(container => {
-        const id = String(container.id);
-        if (activeDragType === 'COLUMN') {
-            // When dragging a column, only allow dropping on other columns
-            return id.startsWith('col-');
-        }
-        // When dragging a task, allow all targets
-        return true;
-    });
-
-    const filteredArgs = { ...rest, droppableContainers: filteredContainers };
-
-    if (activeDragType === 'COLUMN') {
-        // For columns, closestCorners works well horizontally
-        return closestCorners(filteredArgs);
-    }
-
-    // For tasks: use pointerWithin first (most accurate — detects what the pointer
-    // is actually hovering over), then fall back to rectIntersection for edge cases
-    const pointerCollisions = pointerWithin(filteredArgs);
-    if (pointerCollisions.length > 0) {
-        return pointerCollisions;
-    }
-
-    // Fallback: rect intersection catches cases near column edges
-    return rectIntersection(filteredArgs);
-};
 
 const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }) => {
     const { currentUser } = useAuth();
@@ -90,14 +56,21 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
     const [taskToDelete, setTaskToDelete] = useState(null);
     const [activeDragItem, setActiveDragItem] = useState(null);
     const [activeDragType, setActiveDragType] = useState(null); // 'COLUMN' or 'TASK'
+    // Refs mirror the state above so that drag handlers always read the CURRENT value
+    // without being recreated on every state change (which would give DndContext new
+    // callback references mid-drag and cause erratic behavior).
+    const activeDragTypeRef = useRef(null);
+    const activeDragItemRef = useRef(null);
     const dragOriginContainerRef = useRef(null); // Tracks which column a task was in BEFORE handleDragOver moved it
     const hasScrolledRef = useRef(false);
 
     // Configure drag sensors
+    // distance: 10 — require a slightly more deliberate movement before activating drag
+    // (reduces accidental drags on click/tap)
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
-                distance: 8,
+                distance: 10,
             },
         }),
         useSensor(KeyboardSensor, {
@@ -105,11 +78,25 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         })
     );
 
-    // Memoize collision detection to prevent infinite re-renders
-    const collisionDetection = useMemo(
-        () => createTypeAwareCollisionDetection(activeDragType),
-        [activeDragType]
-    );
+    // Stable collision detection — reads activeDragTypeRef so it is NEVER recreated
+    // during an active drag. Passing a new function reference to DndContext mid-drag
+    // can cause it to lose track of droppable positions.
+    const collisionDetection = useCallback((args) => {
+        const dragType = activeDragTypeRef.current;
+        const { droppableContainers, ...rest } = args;
+
+        const filteredContainers = droppableContainers.filter(container => {
+            if (dragType === 'COLUMN') return String(container.id).startsWith('col-');
+            return true;
+        });
+        const filteredArgs = { ...rest, droppableContainers: filteredContainers };
+
+        if (dragType === 'COLUMN') return closestCorners(filteredArgs);
+
+        const pointerCollisions = pointerWithin(filteredArgs);
+        if (pointerCollisions.length > 0) return pointerCollisions;
+        return rectIntersection(filteredArgs);
+    }, []); // intentionally empty — reads ref, stable forever
 
     useEffect(() => {
         // CRITICAL: Only sync from props when BOARD CHANGES.
@@ -449,22 +436,31 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         const { active } = event;
         const id = active.id;
         const cols = columnsRef.current;
+
         if (String(id).startsWith('col-')) {
-            setActiveDragType('COLUMN');
-            setActiveDragItem(cols.find(c => 'col-' + c.id === id));
+            const item = cols.find(c => 'col-' + c.id === id);
+            // Update refs FIRST (synchronous, immediate) so collision detection
+            // and subsequent handleDragOver read the correct type right away.
+            activeDragTypeRef.current = 'COLUMN';
+            activeDragItemRef.current = item;
             dragOriginContainerRef.current = null;
+            // State update is for the DragOverlay render only
+            setActiveDragType('COLUMN');
+            setActiveDragItem(item);
         } else {
-            setActiveDragType('TASK');
             // Record the ORIGINAL container BEFORE any handleDragOver moves it
             const originContainer = cols.find(col => col.cards.find(t => 'task-' + t.id === id));
             dragOriginContainerRef.current = originContainer ? 'col-' + originContainer.id : null;
+
+            let item = null;
             for (const col of cols) {
                 const task = col.cards.find(t => 'task-' + t.id === id);
-                if (task) {
-                    setActiveDragItem(task);
-                    break;
-                }
+                if (task) { item = task; break; }
             }
+            activeDragTypeRef.current = 'TASK';
+            activeDragItemRef.current = item;
+            setActiveDragType('TASK');
+            setActiveDragItem(item);
         }
     }, []);
 
@@ -472,7 +468,9 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         const { active, over } = event;
         const overId = over?.id;
 
-        if (!overId || active.id === overId || activeDragType === 'COLUMN') return;
+        // Read from ref — not from state closure — so this handler doesn't need
+        // activeDragType in its deps and is never recreated mid-drag.
+        if (!overId || active.id === overId || activeDragTypeRef.current === 'COLUMN') return;
 
         const activeContainer = findContainer(active.id);
         const overContainer = findContainer(overId);
@@ -527,13 +525,20 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
 
             return newState;
         });
-    }, [activeDragType, findContainer]);
+    }, [findContainer]); // activeDragType removed — now read from ref
 
 
 
 
     const handleDragEnd = useCallback(async (event) => {
         const { active, over } = event;
+
+        // Capture type from ref BEFORE clearing (ref is synchronous, state is async)
+        const dragType = activeDragTypeRef.current;
+
+        // Clear drag state immediately (ref + state)
+        activeDragTypeRef.current = null;
+        activeDragItemRef.current = null;
         setActiveDragItem(null);
         setActiveDragType(null);
 
@@ -542,7 +547,7 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         // Use ref for latest state in async handler
         const cols = columnsRef.current;
 
-        if (activeDragType === 'COLUMN') {
+        if (dragType === 'COLUMN') {
             if (active.id !== over.id) {
                 const overId = over.id;
                 const actualOverId = String(overId).startsWith('col-') ? overId : findContainer(overId);
@@ -594,7 +599,16 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
                 if (!col) return;
                 const cards = [...col.cards];
                 const oldIdx = cards.findIndex(t => 'task-' + t.id === active.id);
-                const newIdx = cards.findIndex(t => 'task-' + t.id === over.id);
+
+                // over.id can be either a task ID ('task-X') or the column ID ('col-X')
+                // when the user drops into the empty area of the column.
+                // If it's the column itself, move the card to the end.
+                let newIdx = cards.findIndex(t => 'task-' + t.id === over.id);
+                if (newIdx === -1 && String(over.id).startsWith('col-')) {
+                    // Dropped on column area — append to end (if not already there)
+                    newIdx = cards.length - 1;
+                }
+
                 if (oldIdx !== -1 && newIdx !== -1 && oldIdx !== newIdx) {
                     const sortedCards = arrayMove(cards, oldIdx, newIdx);
                     const newCols = cols.map(c => c.id === col.id ? { ...c, cards: sortedCards } : c);
@@ -688,7 +702,18 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
                 updateLocalColumns(columnsRef.current);
             }
         }
-    }, [activeDragType, findContainer, handleToggleSort, updateLocalColumns, currentUser?.id]);
+    }, [findContainer, handleToggleSort, updateLocalColumns, currentUser?.id]); // activeDragType removed — now read from ref
+
+    // Called when drag is cancelled (ESC key, pointer lost, etc.)
+    // Without this, activeDragItem/Type state would stay set and the DragOverlay
+    // would remain visible indefinitely.
+    const handleDragCancel = useCallback(() => {
+        activeDragTypeRef.current = null;
+        activeDragItemRef.current = null;
+        dragOriginContainerRef.current = null;
+        setActiveDragItem(null);
+        setActiveDragType(null);
+    }, []);
 
     const columnIds = useMemo(() => columns.map((col) => 'col-' + col.id), [columns]);
 
@@ -709,7 +734,9 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
     }), []);
 
 
-    // CUSTOM AUTO-SCROLL: High-performance implementation using requestAnimationFrame
+    // CUSTOM AUTO-SCROLL: Proportional speed — accelerates smoothly as the pointer
+    // approaches the edge (0 px/frame at the threshold boundary → MAX_SPEED at edge).
+    // This feels much more natural than a constant linear speed.
     const scrollContainerRef = useRef(null);
     const mousePositionRef = useRef({ x: 0, y: 0 });
 
@@ -717,8 +744,8 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         if (!activeDragItem || !scrollContainerRef.current) return;
 
         const container = scrollContainerRef.current;
-        const SCROLL_SPEED = 6;
-        const EDGE_THRESHOLD = 100;
+        const MAX_SCROLL_SPEED = 4;  // px/frame at the very edge (~240px/s at 60fps)
+        const EDGE_THRESHOLD = 120;  // px from container edge where scrolling begins
         let animationFrameId = null;
 
         const handleMouseMove = (e) => {
@@ -733,9 +760,12 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
             const distFromRight = rect.right - mouseX;
 
             if (distFromLeft < EDGE_THRESHOLD && distFromLeft > 0) {
-                container.scrollLeft -= SCROLL_SPEED;
+                // factor: 1.0 at the very left edge → 0.0 at the threshold boundary
+                const factor = 1 - distFromLeft / EDGE_THRESHOLD;
+                container.scrollLeft -= Math.ceil(MAX_SCROLL_SPEED * factor);
             } else if (distFromRight < EDGE_THRESHOLD && distFromRight > 0) {
-                container.scrollLeft += SCROLL_SPEED;
+                const factor = 1 - distFromRight / EDGE_THRESHOLD;
+                container.scrollLeft += Math.ceil(MAX_SCROLL_SPEED * factor);
             }
 
             animationFrameId = requestAnimationFrame(scrollLoop);
@@ -758,6 +788,7 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
             autoScroll={false}  // DISABLED: Using custom implementation above
         >
             <div
