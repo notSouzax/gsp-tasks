@@ -42,6 +42,32 @@ const sortCardsByDate = (cards) => {
     });
 };
 
+// Type-aware collision detection factory.
+// Returns a NEW function each time dragType changes (null → 'TASK'/'COLUMN' on drag start).
+// dnd-kit v6 with MeasuringStrategy.WhileDragging re-evaluates collisions after every
+// DOM change. If the collision function is completely stable (useCallback([])), dnd-kit
+// never gets the internal "reset" it needs between measurement cycles, causing an
+// infinite measurement → render → measurement loop.
+// By recreating this function when dragType changes (once per drag session), we give
+// dnd-kit the prop-change signal it needs to flush its internal "over" tracking state.
+const buildCollisionDetection = (dragType) => (args) => {
+    const { droppableContainers, ...rest } = args;
+
+    const filteredContainers = droppableContainers.filter(container => {
+        if (dragType === 'COLUMN') return String(container.id).startsWith('col-');
+        return true;
+    });
+    const filteredArgs = { ...rest, droppableContainers: filteredContainers };
+
+    if (dragType === 'COLUMN') return closestCorners(filteredArgs);
+
+    // pointerWithin is most accurate (detects exact hover position).
+    // rectIntersection covers edge cases near column borders.
+    const pointerCollisions = pointerWithin(filteredArgs);
+    if (pointerCollisions.length > 0) return pointerCollisions;
+    return rectIntersection(filteredArgs);
+};
+
 
 const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }) => {
     const { currentUser } = useAuth();
@@ -78,25 +104,15 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         })
     );
 
-    // Stable collision detection — reads activeDragTypeRef so it is NEVER recreated
-    // during an active drag. Passing a new function reference to DndContext mid-drag
-    // can cause it to lose track of droppable positions.
-    const collisionDetection = useCallback((args) => {
-        const dragType = activeDragTypeRef.current;
-        const { droppableContainers, ...rest } = args;
-
-        const filteredContainers = droppableContainers.filter(container => {
-            if (dragType === 'COLUMN') return String(container.id).startsWith('col-');
-            return true;
-        });
-        const filteredArgs = { ...rest, droppableContainers: filteredContainers };
-
-        if (dragType === 'COLUMN') return closestCorners(filteredArgs);
-
-        const pointerCollisions = pointerWithin(filteredArgs);
-        if (pointerCollisions.length > 0) return pointerCollisions;
-        return rectIntersection(filteredArgs);
-    }, []); // intentionally empty — reads ref, stable forever
+    // Re-created once when activeDragType changes (null → 'TASK'/'COLUMN' at drag start).
+    // This single prop change gives dnd-kit the internal flush it needs when using
+    // MeasuringStrategy.WhileDragging. After that, the function is stable for the
+    // entire drag session. The handlers themselves read from activeDragTypeRef (not
+    // from this memoized value) so they stay stable even across this one re-creation.
+    const collisionDetection = useMemo(
+        () => buildCollisionDetection(activeDragType),
+        [activeDragType]
+    );
 
     useEffect(() => {
         // CRITICAL: Only sync from props when BOARD CHANGES.
