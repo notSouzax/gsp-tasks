@@ -8,7 +8,6 @@ import {
     DndContext,
     closestCorners,
     closestCenter,
-    pointerWithin,
     KeyboardSensor,
     PointerSensor,
     useSensor,
@@ -42,6 +41,50 @@ const sortCardsByDate = (cards) => {
     });
 };
 
+// Custom collision algorithm: measures distance from the POINTER to each droppable's
+// center, rather than from the dragged overlay's center (which is what closestCenter does).
+//
+// WHY this matters:
+//   closestCenter uses the overlay's bounding-box center as the reference point.
+//   If you grab a card near its bottom, the overlay's center is ~half-card-height
+//   ABOVE the cursor. So the nearest card by center-distance is 1-2 cards above
+//   where you're actually pointing → the drop shadow appears too high.
+//
+//   pointerToClosestCenter uses the raw pointer coordinates as the reference, so
+//   the shadow always tracks the cursor intuitively. It still measures to card
+//   CENTERS (not card edges), so transitions are stable: the winner only changes
+//   when the pointer crosses the midpoint between two card centers, preventing
+//   the rapid toggling / 2-card-skip that plagued pointerWithin.
+//
+// Keyboard fallback: if pointerCoordinates is null (keyboard navigation), we fall
+// back to closestCenter so arrow-key sorting still works correctly.
+function pointerToClosestCenter({ droppableContainers, droppableRects, pointerCoordinates, collisionRect }) {
+    // Keyboard navigation has no pointer — fall back to overlay-center distance
+    if (!pointerCoordinates) {
+        return closestCenter({ droppableContainers, droppableRects, pointerCoordinates, collisionRect });
+    }
+
+    const { x: px, y: py } = pointerCoordinates;
+    let minDist = Infinity;
+    let winner = null;
+
+    for (const container of droppableContainers) {
+        const rect = droppableRects.get(container.id);
+        if (!rect) continue;
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+        const dist = Math.hypot(px - cx, py - cy);
+        if (dist < minDist) {
+            minDist = dist;
+            winner = container;
+        }
+    }
+
+    return winner
+        ? [{ id: winner.id, data: { droppableContainer: winner, value: minDist } }]
+        : [];
+}
+
 // Type-aware collision detection factory.
 // Returns a NEW function each time dragType changes (null → 'TASK'/'COLUMN' on drag start).
 // dnd-kit v6 with MeasuringStrategy.WhileDragging re-evaluates collisions after every
@@ -51,38 +94,64 @@ const sortCardsByDate = (cards) => {
 // By recreating this function when dragType changes (once per drag session), we give
 // dnd-kit the prop-change signal it needs to flush its internal "over" tracking state.
 const buildCollisionDetection = (dragType) => (args) => {
-    const { droppableContainers, ...rest } = args;
+    const { droppableContainers, droppableRects, pointerCoordinates, collisionRect } = args;
 
-    const filteredContainers = droppableContainers.filter(container => {
-        if (dragType === 'COLUMN') return String(container.id).startsWith('col-');
-        return true;
-    });
-    const filteredArgs = { ...rest, droppableContainers: filteredContainers };
+    if (dragType === 'COLUMN') {
+        const colContainers = droppableContainers.filter(c => String(c.id).startsWith('col-'));
+        return closestCorners({ droppableContainers: colContainers, droppableRects, pointerCoordinates, collisionRect });
+    }
 
-    if (dragType === 'COLUMN') return closestCorners(filteredArgs);
+    // TASK drag: column-scoped pointer collision
+    //
+    // Core insight: column containers (col-X) are also registered droppables and their
+    // centers sit in the MIDDLE of the column. If we include them in the candidate pool,
+    // the column center often wins over nearby task cards → over.id = 'col-X' → the
+    // SortableContext can't find 'col-X' in taskIds → shadow freezes or jumps to a
+    // wrong position.
+    //
+    // Solution: find which column the cursor is currently inside (by X-bounds), then
+    // search ONLY the tasks in that column. This gives accurate vertical shadow tracking
+    // with zero column-center interference. Column containers are only used as a fallback
+    // for empty-column targets (no tasks to collide with).
+    const taskContainers = droppableContainers.filter(c => !String(c.id).startsWith('col-'));
+    const colContainers = droppableContainers.filter(c => String(c.id).startsWith('col-'));
 
-    // WHY closestCenter instead of pointerWithin:
-    //
-    // pointerWithin uses the exact cursor tip as the detection point. During fast
-    // vertical drags, the cursor can traverse a card entirely before the sort
-    // animation re-positions it — causing the algorithm to "skip" that card and
-    // jump 2 positions at once.
-    //
-    // closestCenter uses the CENTER of the dragged overlay as the reference point.
-    // The overlay center moves smoothly relative to the cards' centers, so the
-    // algorithm transitions one card at a time regardless of pointer speed.
-    //
-    // Cross-column detection still works: when the overlay is physically inside
-    // another column, the tasks/container in that column are closer by center
-    // distance, so handleDragOver correctly detects the cross-column move.
-    // Empty columns are registered as droppables ('col-X'), and their center is
-    // detected when the overlay enters their area.
-    //
-    // Fallback to pointerWithin when closestCenter finds nothing (e.g. pointer
-    // leaves all droppable areas entirely — rare but possible).
-    const centerCollisions = closestCenter(filteredArgs);
-    if (centerCollisions.length > 0) return centerCollisions;
-    return pointerWithin(filteredArgs);
+    if (pointerCoordinates) {
+        const px = pointerCoordinates.x;
+
+        // Identify which column contains the cursor (by X bounds)
+        const cursorCol = colContainers.find(col => {
+            const rect = droppableRects.get(col.id);
+            return rect && px >= rect.left && px <= rect.right;
+        });
+
+        if (cursorCol) {
+            const colRect = droppableRects.get(cursorCol.id);
+            if (!colRect) {
+                // Rect disappeared mid-drag (rare timing edge case) — skip to fallback
+                return pointerToClosestCenter({ droppableContainers: taskContainers, droppableRects, pointerCoordinates, collisionRect });
+            }
+            // Only tasks whose horizontal center falls within this column
+            const tasksInCol = taskContainers.filter(t => {
+                const rect = droppableRects.get(t.id);
+                if (!rect) return false;
+                const taskCenterX = (rect.left + rect.right) / 2;
+                return taskCenterX >= colRect.left && taskCenterX <= colRect.right;
+            });
+
+            if (tasksInCol.length > 0) {
+                // Non-empty column: find nearest task by pointer-to-center distance
+                return pointerToClosestCenter({ droppableContainers: tasksInCol, droppableRects, pointerCoordinates, collisionRect });
+            }
+            // Empty column: return the column container so handleDragOver can append to it
+            return [{ id: cursorCol.id, data: { droppableContainer: cursorCol, value: 0 } }];
+        }
+    }
+
+    // Fallback: pointer outside all columns, or keyboard navigation (no pointerCoordinates)
+    const taskHits = pointerToClosestCenter({ droppableContainers: taskContainers, droppableRects, pointerCoordinates, collisionRect });
+    if (taskHits.length > 0) return taskHits;
+    return closestCenter({ droppableContainers, droppableRects, pointerCoordinates, collisionRect });
 };
 
 
@@ -777,28 +846,37 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         if (!activeDragItem || !scrollContainerRef.current) return;
 
         const container = scrollContainerRef.current;
-        const MAX_SCROLL_SPEED = 4;  // px/frame at the very edge (~240px/s at 60fps)
-        const EDGE_THRESHOLD = 120;  // px from container edge where scrolling begins
+        // Constant speed — no acceleration. The user perceives acceleration as
+        // "going crazy"; a steady 3 px/frame (~180 px/s at 60 fps) is enough to
+        // cross a column in ~1.5 s and feels controlled.
+        const SCROLL_SPEED = 3;
+        // Zone inside the container edge where scrolling activates.
+        const EDGE_THRESHOLD = 150;
+        // Allow cursor to travel this far PAST the container edge and still scroll.
+        // Needed because when you grab a card near its center and drag left, the
+        // card's visual extends past the edge before your cursor does, making it
+        // feel like scroll stopped too early.
+        const OUTER_BUFFER = 160;
+
         let animationFrameId = null;
+        let cancelled = false; // Guard against stale loops if cleanup races RAF
 
         const handleMouseMove = (e) => {
             mousePositionRef.current = { x: e.clientX, y: e.clientY };
         };
 
         const scrollLoop = () => {
+            if (cancelled) return; // Stale loop — exit without rescheduling
+
             const rect = container.getBoundingClientRect();
             const mouseX = mousePositionRef.current.x;
-
             const distFromLeft = mouseX - rect.left;
             const distFromRight = rect.right - mouseX;
 
-            if (distFromLeft < EDGE_THRESHOLD && distFromLeft > 0) {
-                // factor: 1.0 at the very left edge → 0.0 at the threshold boundary
-                const factor = 1 - distFromLeft / EDGE_THRESHOLD;
-                container.scrollLeft -= Math.ceil(MAX_SCROLL_SPEED * factor);
-            } else if (distFromRight < EDGE_THRESHOLD && distFromRight > 0) {
-                const factor = 1 - distFromRight / EDGE_THRESHOLD;
-                container.scrollLeft += Math.ceil(MAX_SCROLL_SPEED * factor);
+            if (distFromLeft < EDGE_THRESHOLD && distFromLeft > -OUTER_BUFFER) {
+                container.scrollLeft -= SCROLL_SPEED;
+            } else if (distFromRight < EDGE_THRESHOLD && distFromRight > -OUTER_BUFFER) {
+                container.scrollLeft += SCROLL_SPEED;
             }
 
             animationFrameId = requestAnimationFrame(scrollLoop);
@@ -808,6 +886,7 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         animationFrameId = requestAnimationFrame(scrollLoop);
 
         return () => {
+            cancelled = true;
             document.removeEventListener('mousemove', handleMouseMove);
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
         };
