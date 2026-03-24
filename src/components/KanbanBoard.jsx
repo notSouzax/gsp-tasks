@@ -7,8 +7,8 @@ import { AutomationEngine } from '../features/automations';
 import {
     DndContext,
     closestCorners,
+    closestCenter,
     pointerWithin,
-    rectIntersection,
     KeyboardSensor,
     PointerSensor,
     useSensor,
@@ -61,11 +61,28 @@ const buildCollisionDetection = (dragType) => (args) => {
 
     if (dragType === 'COLUMN') return closestCorners(filteredArgs);
 
-    // pointerWithin is most accurate (detects exact hover position).
-    // rectIntersection covers edge cases near column borders.
-    const pointerCollisions = pointerWithin(filteredArgs);
-    if (pointerCollisions.length > 0) return pointerCollisions;
-    return rectIntersection(filteredArgs);
+    // WHY closestCenter instead of pointerWithin:
+    //
+    // pointerWithin uses the exact cursor tip as the detection point. During fast
+    // vertical drags, the cursor can traverse a card entirely before the sort
+    // animation re-positions it — causing the algorithm to "skip" that card and
+    // jump 2 positions at once.
+    //
+    // closestCenter uses the CENTER of the dragged overlay as the reference point.
+    // The overlay center moves smoothly relative to the cards' centers, so the
+    // algorithm transitions one card at a time regardless of pointer speed.
+    //
+    // Cross-column detection still works: when the overlay is physically inside
+    // another column, the tasks/container in that column are closer by center
+    // distance, so handleDragOver correctly detects the cross-column move.
+    // Empty columns are registered as droppables ('col-X'), and their center is
+    // detected when the overlay enters their area.
+    //
+    // Fallback to pointerWithin when closestCenter finds nothing (e.g. pointer
+    // leaves all droppable areas entirely — rare but possible).
+    const centerCollisions = closestCenter(filteredArgs);
+    if (centerCollisions.length > 0) return centerCollisions;
+    return pointerWithin(filteredArgs);
 };
 
 
