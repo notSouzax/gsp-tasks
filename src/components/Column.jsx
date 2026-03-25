@@ -144,6 +144,7 @@ const Column = ({ column, tasks, onAdd, onTaskClick, onDelete, onUpdateTask, onM
             {/* TASKS AREA */}
             {!column.isCollapsed && (
                 <div
+                    data-column-scroll={column.id}
                     className={`
                         flex-1 overflow-y-auto overflow-x-hidden p-2 flex flex-col gap-3 custom-scrollbar rounded-xl transition-colors duration-200
                         ${isDragging ? 'bg-slate-200/30 dark:bg-slate-800/30' : ''}

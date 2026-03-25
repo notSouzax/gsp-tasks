@@ -282,11 +282,11 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
     // Helper functions moved outside or stabilized
 
     const findContainer = useCallback((id) => {
-        const cols = columnsRef.current; // access stable ref
+        const cols = columnsRef.current;
         if (cols.find(col => 'col-' + col.id === id)) return id;
-        const column = cols.find(col => col.cards.find(t => 'task-' + t.id === id));
+        const column = cols.find(col => (col.cards || []).find(t => 'task-' + t.id === id));
         return column ? 'col-' + column.id : null;
-    }, []); // No dependencies needed!
+    }, []);
 
 
     // --- CORE HANDLERS (Ordered by Dependency) ---
@@ -551,12 +551,12 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
             setActiveDragItem(item);
         } else {
             // Record the ORIGINAL container BEFORE any handleDragOver moves it
-            const originContainer = cols.find(col => col.cards.find(t => 'task-' + t.id === id));
+            const originContainer = cols.find(col => (col.cards || []).find(t => 'task-' + t.id === id));
             dragOriginContainerRef.current = originContainer ? 'col-' + originContainer.id : null;
 
             let item = null;
             for (const col of cols) {
-                const task = col.cards.find(t => 'task-' + t.id === id);
+                const task = (col.cards || []).find(t => 'task-' + t.id === id);
                 if (task) { item = task; break; }
             }
             activeDragTypeRef.current = 'TASK';
@@ -588,6 +588,8 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
             }
 
             const activeIndex = activeItems.findIndex(t => 'task-' + t.id === active.id);
+            if (activeIndex === -1) return prev; // Task already moved — skip
+
             const overIndex = overItems.findIndex(t => 'task-' + t.id === overId);
 
             let newIndex;
@@ -604,12 +606,12 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
                 newIndex = overIndex >= 0 ? overIndex + modifier : overItems.length;
             }
 
+            const itemMoved = activeItems[activeIndex];
             const newState = prev.map((c) => {
                 if ('col-' + c.id === activeContainer) {
                     return { ...c, cards: activeItems.filter((t) => 'task-' + t.id !== active.id) };
                 }
                 if ('col-' + c.id === overContainer) {
-                    const itemMoved = activeItems[activeIndex];
                     const newCards = [
                         ...overItems.slice(0, newIndex),
                         { ...itemMoved, column_id: c.id, status: c.title },
@@ -698,7 +700,7 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
             if (!wasCrossColumn) {
                 // Internal reorder within same column
                 const col = cols.find(c => 'col-' + c.id === currentContainer);
-                if (!col) return;
+                if (!col || !col.cards) return;
                 const cards = [...col.cards];
                 const oldIdx = cards.findIndex(t => 'task-' + t.id === active.id);
 
@@ -836,9 +838,8 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
     }), []);
 
 
-    // CUSTOM AUTO-SCROLL: Proportional speed — accelerates smoothly as the pointer
-    // approaches the edge (0 px/frame at the threshold boundary → MAX_SPEED at edge).
-    // This feels much more natural than a constant linear speed.
+    // CUSTOM AUTO-SCROLL: Handles both horizontal (board) and vertical (column) scrolling.
+    // Constant speed at 3 px/frame (~180 px/s at 60 fps) — feels controlled.
     const scrollContainerRef = useRef(null);
     const mousePositionRef = useRef({ x: 0, y: 0 });
 
@@ -846,30 +847,28 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
         if (!activeDragItem || !scrollContainerRef.current) return;
 
         const container = scrollContainerRef.current;
-        // Constant speed — no acceleration. The user perceives acceleration as
-        // "going crazy"; a steady 3 px/frame (~180 px/s at 60 fps) is enough to
-        // cross a column in ~1.5 s and feels controlled.
         const SCROLL_SPEED = 3;
-        // Zone inside the container edge where scrolling activates.
         const EDGE_THRESHOLD = 150;
-        // Allow cursor to travel this far PAST the container edge and still scroll.
-        // Needed because when you grab a card near its center and drag left, the
-        // card's visual extends past the edge before your cursor does, making it
-        // feel like scroll stopped too early.
         const OUTER_BUFFER = 160;
+        // Vertical autoscroll uses a smaller threshold since columns are narrower
+        const V_EDGE_THRESHOLD = 80;
+        const V_OUTER_BUFFER = 60;
 
         let animationFrameId = null;
-        let cancelled = false; // Guard against stale loops if cleanup races RAF
+        let cancelled = false;
 
         const handleMouseMove = (e) => {
             mousePositionRef.current = { x: e.clientX, y: e.clientY };
         };
 
         const scrollLoop = () => {
-            if (cancelled) return; // Stale loop — exit without rescheduling
+            if (cancelled) return;
 
             const rect = container.getBoundingClientRect();
             const mouseX = mousePositionRef.current.x;
+            const mouseY = mousePositionRef.current.y;
+
+            // --- Horizontal autoscroll (board level) ---
             const distFromLeft = mouseX - rect.left;
             const distFromRight = rect.right - mouseX;
 
@@ -879,15 +878,64 @@ const KanbanBoard = ({ boardId, initialColumns, onColumnsChange, initialTaskId }
                 container.scrollLeft += SCROLL_SPEED;
             }
 
+            // --- Vertical autoscroll (column level) ---
+            // Find the column task container under the cursor via data attribute
+            const columnScrollEls = container.querySelectorAll('[data-column-scroll]');
+            for (const colEl of columnScrollEls) {
+                const colRect = colEl.getBoundingClientRect();
+                // Only act on the column the cursor is horizontally inside
+                if (mouseX < colRect.left || mouseX > colRect.right) continue;
+
+                const distFromTop = mouseY - colRect.top;
+                const distFromBottom = colRect.bottom - mouseY;
+
+                if (distFromTop < V_EDGE_THRESHOLD && distFromTop > -V_OUTER_BUFFER) {
+                    colEl.scrollTop -= SCROLL_SPEED;
+                } else if (distFromBottom < V_EDGE_THRESHOLD && distFromBottom > -V_OUTER_BUFFER) {
+                    colEl.scrollTop += SCROLL_SPEED;
+                }
+                break; // Only one column at a time
+            }
+
             animationFrameId = requestAnimationFrame(scrollLoop);
         };
 
+        // --- Mouse wheel scroll while dragging ---
+        // During drag, pointer events are captured by the overlay so normal wheel
+        // scrolling is blocked. We manually forward wheel deltas to the right container.
+        const handleWheel = (e) => {
+            const mouseX = mousePositionRef.current.x;
+            const mouseY = mousePositionRef.current.y;
+
+            // Vertical: scroll the column under the cursor
+            const columnScrollEls = container.querySelectorAll('[data-column-scroll]');
+            let scrolledVertically = false;
+            for (const colEl of columnScrollEls) {
+                const colRect = colEl.getBoundingClientRect();
+                if (mouseX >= colRect.left && mouseX <= colRect.right &&
+                    mouseY >= colRect.top && mouseY <= colRect.bottom) {
+                    colEl.scrollTop += e.deltaY;
+                    scrolledVertically = true;
+                    break;
+                }
+            }
+
+            // Horizontal: if no column consumed vertical scroll, or shift+wheel
+            if (!scrolledVertically || e.shiftKey) {
+                container.scrollLeft += e.shiftKey ? e.deltaY : e.deltaX;
+            }
+
+            e.preventDefault();
+        };
+
         document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('wheel', handleWheel, { passive: false });
         animationFrameId = requestAnimationFrame(scrollLoop);
 
         return () => {
             cancelled = true;
             document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('wheel', handleWheel);
             if (animationFrameId) cancelAnimationFrame(animationFrameId);
         };
     }, [activeDragItem]);
