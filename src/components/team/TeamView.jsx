@@ -72,7 +72,7 @@ const TeamSelector = ({ teams, currentTeamId, onSelect, onJoin }) => {
 
 const TeamViewInner = () => {
     const { teams, teamsLoading, currentTeamId, setCurrentTeamId } = useTeam();
-    const [activeTab, setActiveTab] = useState('chat');
+    const [activeTab, setActiveTab] = useState('docs');
     const [showSettings, setShowSettings] = useState(false);
     const [showJoin, setShowJoin] = useState(false);
 

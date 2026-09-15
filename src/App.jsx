@@ -22,6 +22,7 @@ import CRMPage from './pages/CRMPage';
 import AutomationsPage from './pages/AutomationsPage';
 import CalendarPage from './pages/CalendarPage';
 import TeamPage from './pages/TeamPage';
+import AdminPage from './pages/AdminPage';
 
 /**
  * AppContent - Main application content component
@@ -206,6 +207,7 @@ const AppContent = () => {
           />
           <Route path="crm" element={<CRMPage />} />
           <Route path="equipo" element={<TeamPage />} />
+          <Route path="admin" element={<AdminPage />} />
           <Route path="automations" element={<AutomationsPage activeBoardId={activeBoardId} />} />
           <Route path="calendar" element={<CalendarPage />} />
         </Route>

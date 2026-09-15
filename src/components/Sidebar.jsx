@@ -3,10 +3,12 @@ import { NavLink } from 'react-router-dom';
 import { Icons } from './ui/Icons';
 import logo from '../assets/logo.jpg';
 import SettingsModal from './modals/SettingsModal';
+import { useAuth } from '../context/AuthContext';
 
 const Sidebar = () => {
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const { isSuperadmin } = useAuth();
 
     return (
         <div
@@ -97,6 +99,16 @@ const Sidebar = () => {
                         <span className="material-symbols-outlined text-[20px]">calendar_month</span>
                         {!isCollapsed && <span className="text-sm font-medium">Calendario</span>}
                     </NavItem>
+                    {isSuperadmin && (
+                        <NavItem
+                            to="/admin"
+                            title="Administración"
+                            collapsed={isCollapsed}
+                        >
+                            <span className="material-symbols-outlined text-[20px]">admin_panel_settings</span>
+                            {!isCollapsed && <span className="text-sm font-medium">Administración</span>}
+                        </NavItem>
+                    )}
                 </div>
             </div>
 

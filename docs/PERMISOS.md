@@ -1,10 +1,27 @@
 # 🔐 Permisos de la aplicación
 
-Este documento resume qué puede hacer cada tipo de usuario. Hay **dos sistemas
-de roles independientes**:
+Este documento resume qué puede hacer cada tipo de usuario. Hay **tres niveles**:
 
+0. **Superadmin** — administrador supremo de toda la app (un único perfil).
 1. **Roles de Workspace** — para tableros, tareas, CRM, calendario, etc.
 2. **Roles de Equipo** — para el apartado **Equipo** (Chat, Documentación, Cambios).
+
+---
+
+## 0. Superadmin (administrador supremo)
+
+Actualmente: **`sozinho2004@gmail.com`** (Gabriel de Souza).
+
+Es el único que ve el apartado **Administración** en el menú lateral. Puede:
+
+- **Crear usuarios** nuevos (email + contraseña temporal) y eliminarlos.
+- Ver **todos los usuarios** de la app.
+- **Añadir/quitar** usuarios a cualquier equipo y asignarles rol (Admin, Editor, Común).
+- **Crear y eliminar equipos**, y ver sus claves de acceso.
+- Tiene acceso total (salta las restricciones normales de equipo).
+
+> Técnicamente se marca con `profiles.is_superadmin = true`. Para nombrar otro
+> superadmin en el futuro, se activa ese flag en su perfil (o desde el panel).
 
 > Un usuario puede ser, por ejemplo, *owner* de su workspace y a la vez *member*
 > de un equipo al que se unió con una clave. Son cosas separadas.
