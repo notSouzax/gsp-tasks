@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import TeamChat from './TeamChat';
 import TeamDocs from './TeamDocs';
+import TeamChanges from './TeamChanges';
 
 const TEAM_TABS = [
     { id: 'chat', label: 'Chat', icon: 'forum' },
     { id: 'docs', label: 'Documentación', icon: 'auto_stories' },
+    { id: 'changes', label: 'Cambios', icon: 'campaign' },
 ];
 
 const TeamView = () => {
@@ -37,6 +39,7 @@ const TeamView = () => {
             <div className="flex-1 flex flex-col overflow-hidden">
                 {activeTab === 'chat' && <TeamChat />}
                 {activeTab === 'docs' && <TeamDocs />}
+                {activeTab === 'changes' && <TeamChanges />}
             </div>
         </div>
     );
