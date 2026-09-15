@@ -1,11 +1,9 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
-import { useWorkspace } from '../../context/WorkspaceContext';
+import { useTeam } from '../../features/team/TeamContext';
 import { useTeamChanges } from '../../features/team/hooks/useTeamChanges';
-import { useTeamEditors } from '../../features/team/hooks/useTeamEditors';
 import {
-    buildMemberMap,
     getMember,
     formatDate,
     formatTime,
@@ -76,16 +74,12 @@ const AttachmentTile = ({ doc, onOpen }) => {
 
 const TeamChanges = () => {
     const { currentUser } = useAuth();
-    const { currentWorkspace, workspaceMembers, userRole } = useWorkspace();
-    const workspaceId = currentWorkspace?.id;
+    const { currentTeamId, memberMap, canManage, isTeamAdmin } = useTeam();
 
-    const { changes, isLoading, createChange, deleteChange, isPublishing } = useTeamChanges(workspaceId, currentUser);
-    const { editorIds } = useTeamEditors(workspaceId, currentUser);
+    const { changes, isLoading, createChange, deleteChange, isPublishing } = useTeamChanges(currentTeamId, currentUser);
 
-    const isAdmin = userRole === 'owner' || userRole === 'admin';
-    const canPublish = isAdmin || editorIds.includes(currentUser?.id);
-
-    const memberMap = useMemo(() => buildMemberMap(workspaceMembers, currentUser), [workspaceMembers, currentUser]);
+    const isAdmin = isTeamAdmin;
+    const canPublish = canManage;
 
     // Composer
     const [text, setText] = useState('');

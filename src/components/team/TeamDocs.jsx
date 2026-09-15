@@ -1,40 +1,26 @@
 import React, { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
-import { useWorkspace } from '../../context/WorkspaceContext';
+import { useTeam } from '../../features/team/TeamContext';
 import { useTeamDocuments } from '../../features/team/hooks/useTeamDocuments';
-import { useTeamEditors } from '../../features/team/hooks/useTeamEditors';
 import { DOC_CATEGORIES, getCategoryStyle } from '../../features/team/constants';
-import { buildMemberMap } from '../../features/team/utils';
 import DocumentCard from './DocumentCard';
 import DocViewerModal from './modals/DocViewerModal';
 import UploadDocModal from './modals/UploadDocModal';
-import ManageEditorsModal from './modals/ManageEditorsModal';
 import ConfirmationModal from '../modals/ConfirmationModal';
 import { Icons } from '../ui/Icons';
 
 const TeamDocs = () => {
     const { currentUser } = useAuth();
-    const { currentWorkspace, workspaceMembers, userRole } = useWorkspace();
-    const workspaceId = currentWorkspace?.id;
+    const { currentTeamId, memberMap, canManage } = useTeam();
 
-    const { documents, isLoading, uploadFile, createLink, deleteDocument } = useTeamDocuments(workspaceId, currentUser);
-    const { editorIds, isEditor, grantEditor, revokeEditor } = useTeamEditors(workspaceId, currentUser);
+    const { documents, isLoading, uploadFile, createLink, deleteDocument } = useTeamDocuments(currentTeamId, currentUser);
 
     const [activeCategory, setActiveCategory] = useState('all');
     const [search, setSearch] = useState('');
     const [viewerDoc, setViewerDoc] = useState(null);
     const [showUpload, setShowUpload] = useState(false);
-    const [showEditors, setShowEditors] = useState(false);
     const [docToDelete, setDocToDelete] = useState(null);
-
-    const isAdmin = userRole === 'owner' || userRole === 'admin';
-    const canManage = isAdmin || editorIds.includes(currentUser?.id);
-
-    const memberMap = useMemo(
-        () => buildMemberMap(workspaceMembers, currentUser),
-        [workspaceMembers, currentUser]
-    );
 
     // Filtrado por categoría + búsqueda
     const filtered = useMemo(() => {
@@ -87,16 +73,6 @@ const TeamDocs = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {isAdmin && (
-                            <button
-                                onClick={() => setShowEditors(true)}
-                                className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-xl transition-colors"
-                                title="Gestionar quién puede editar"
-                            >
-                                <span className="material-symbols-outlined text-[18px]">manage_accounts</span>
-                                <span className="hidden sm:inline">Permisos</span>
-                            </button>
-                        )}
                         {canManage && (
                             <button
                                 onClick={() => setShowUpload(true)}
@@ -175,16 +151,6 @@ const TeamDocs = () => {
                     onUploadFile={uploadFile}
                     onCreateLink={createLink}
                     defaultCategory={activeCategory !== 'all' ? activeCategory : undefined}
-                />
-            )}
-            {showEditors && (
-                <ManageEditorsModal
-                    members={workspaceMembers}
-                    currentUser={currentUser}
-                    isEditor={isEditor}
-                    onGrant={grantEditor}
-                    onRevoke={revokeEditor}
-                    onClose={() => setShowEditors(false)}
                 />
             )}
             <ConfirmationModal

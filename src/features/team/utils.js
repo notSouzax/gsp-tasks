@@ -2,6 +2,12 @@
  * Utilidades del apartado de Equipo.
  */
 
+/** Genera un código legible de 8 caracteres (sin caracteres ambiguos). */
+export const genCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+};
+
 /**
  * Construye un mapa { user_id: { name, avatar_url, email } } a partir de los
  * miembros del workspace, incluyendo al usuario actual como respaldo.

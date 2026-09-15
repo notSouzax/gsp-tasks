@@ -4,17 +4,14 @@ import { supabase } from '../../../lib/supabaseClient';
 import { STORAGE_BUCKET } from '../constants';
 
 /**
- * Hook del muro de "Cambios en el programa".
- * Publicaciones con texto y adjuntos (fotos, documentos, vídeos o enlaces),
- * asociadas al workspace y en tiempo real.
- *
- * @param {string} workspaceId
+ * Muro de "Cambios en el programa" (scoped por team_id).
+ * @param {string} teamId
  * @param {Object} currentUser
  */
-export const useTeamChanges = (workspaceId, currentUser) => {
+export const useTeamChanges = (teamId, currentUser) => {
     const queryClient = useQueryClient();
     const userId = currentUser?.id;
-    const queryKey = ['team', 'changes', workspaceId];
+    const queryKey = ['team', 'changes', teamId];
 
     const { data: changes = [], isLoading, error } = useQuery({
         queryKey,
@@ -22,35 +19,33 @@ export const useTeamChanges = (workspaceId, currentUser) => {
             const { data, error } = await supabase
                 .from('team_changes')
                 .select('*')
-                .eq('workspace_id', workspaceId)
+                .eq('team_id', teamId)
                 .order('created_at', { ascending: false });
             if (error) throw error;
             return data || [];
         },
-        enabled: !!workspaceId,
+        enabled: !!teamId,
         staleTime: 15_000,
     });
 
-    // Realtime
     useEffect(() => {
-        if (!workspaceId) return;
+        if (!teamId) return;
         const channel = supabase
-            .channel(`team_changes:${workspaceId}`)
+            .channel(`team_changes:${teamId}`)
             .on(
                 'postgres_changes',
-                { event: '*', schema: 'public', table: 'team_changes', filter: `workspace_id=eq.${workspaceId}` },
+                { event: '*', schema: 'public', table: 'team_changes', filter: `team_id=eq.${teamId}` },
                 () => queryClient.invalidateQueries({ queryKey })
             )
             .subscribe();
         return () => { supabase.removeChannel(channel); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [workspaceId, queryClient]);
+    }, [teamId, queryClient]);
 
-    /** Sube un archivo al bucket (subcarpeta changes/) y devuelve el adjunto. */
     const uploadAttachment = async (file) => {
         const ext = file.name.split('.').pop();
         const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        const storagePath = `${workspaceId}/changes/${safeName}`;
+        const storagePath = `${teamId}/changes/${safeName}`;
 
         const { error: uploadError } = await supabase.storage
             .from(STORAGE_BUCKET)
@@ -69,10 +64,6 @@ export const useTeamChanges = (workspaceId, currentUser) => {
         };
     };
 
-    /**
-     * Crea una publicación.
-     * @param {{ content:string, files?:File[], links?:{url:string,name?:string}[] }} payload
-     */
     const createChange = useMutation({
         mutationFn: async ({ content, files = [], links = [] }) => {
             const uploaded = [];
@@ -88,7 +79,7 @@ export const useTeamChanges = (workspaceId, currentUser) => {
             const { data, error } = await supabase
                 .from('team_changes')
                 .insert([{
-                    workspace_id: workspaceId,
+                    team_id: teamId,
                     author_id: userId,
                     content: content || '',
                     attachments: [...uploaded, ...linkAttachments],

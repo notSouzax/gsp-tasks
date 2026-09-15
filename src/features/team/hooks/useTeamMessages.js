@@ -3,16 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../../../lib/supabaseClient';
 
 /**
- * Hook del chat de departamento.
- * Carga los mensajes del workspace y se suscribe a cambios en tiempo real.
- *
- * @param {string} workspaceId - ID del workspace activo
- * @param {Object} currentUser - Usuario autenticado
+ * Chat del equipo (scoped por team_id).
+ * @param {string} teamId - ID del equipo activo
+ * @param {Object} currentUser
  */
-export const useTeamMessages = (workspaceId, currentUser) => {
+export const useTeamMessages = (teamId, currentUser) => {
     const queryClient = useQueryClient();
     const userId = currentUser?.id;
-    const queryKey = ['team', 'messages', workspaceId];
+    const queryKey = ['team', 'messages', teamId];
 
     const { data: messages = [], isLoading, error } = useQuery({
         queryKey,
@@ -20,39 +18,29 @@ export const useTeamMessages = (workspaceId, currentUser) => {
             const { data, error } = await supabase
                 .from('team_messages')
                 .select('*')
-                .eq('workspace_id', workspaceId)
+                .eq('team_id', teamId)
                 .order('created_at', { ascending: true })
                 .limit(500);
             if (error) throw error;
             return data || [];
         },
-        enabled: !!workspaceId,
+        enabled: !!teamId,
         staleTime: 10_000,
     });
 
-    // Suscripción en tiempo real
     useEffect(() => {
-        if (!workspaceId) return;
-
+        if (!teamId) return;
         const channel = supabase
-            .channel(`team_messages:${workspaceId}`)
+            .channel(`team_messages:${teamId}`)
             .on(
                 'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'team_messages',
-                    filter: `workspace_id=eq.${workspaceId}`,
-                },
+                { event: '*', schema: 'public', table: 'team_messages', filter: `team_id=eq.${teamId}` },
                 () => queryClient.invalidateQueries({ queryKey })
             )
             .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
+        return () => { supabase.removeChannel(channel); };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [workspaceId, queryClient]);
+    }, [teamId, queryClient]);
 
     const sendMessage = useMutation({
         mutationFn: async (content) => {
@@ -60,7 +48,7 @@ export const useTeamMessages = (workspaceId, currentUser) => {
             if (!trimmed) return null;
             const { data, error } = await supabase
                 .from('team_messages')
-                .insert([{ workspace_id: workspaceId, user_id: userId, content: trimmed }])
+                .insert([{ team_id: teamId, user_id: userId, content: trimmed }])
                 .select()
                 .single();
             if (error) throw error;
