@@ -74,6 +74,14 @@ const Sidebar = () => {
                         {!isCollapsed && <span className="text-sm font-medium">CRM</span>}
                     </NavItem>
                     <NavItem
+                        to="/equipo"
+                        title="Equipo"
+                        collapsed={isCollapsed}
+                    >
+                        <span className="material-symbols-outlined text-[20px]">groups</span>
+                        {!isCollapsed && <span className="text-sm font-medium">Equipo</span>}
+                    </NavItem>
+                    <NavItem
                         to="/automations"
                         title="Automatizaciones"
                         collapsed={isCollapsed}

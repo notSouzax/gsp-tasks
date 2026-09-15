@@ -44,6 +44,7 @@ const MainLayout = ({
         if (path === '/') return 'Dashboard';
         if (path === '/tableros') return 'Tableros';
         if (path === '/crm') return 'CRM';
+        if (path === '/equipo') return 'Equipo';
         if (path === '/automations') return 'Automatizaciones';
         if (path === '/calendar') return 'Calendario';
         return 'Gestor';
