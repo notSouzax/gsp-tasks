@@ -244,6 +244,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     const isAdmin = currentUser?.role === 'admin';
+    const isSuperadmin = currentUser?.is_superadmin === true;
 
     return (
         <AuthContext.Provider value={{
@@ -253,6 +254,7 @@ export const AuthProvider = ({ children }) => {
             logout,
             register,
             isAdmin,
+            isSuperadmin,
             updateUser
         }}>
             {loading ? <SplashScreen status="Iniciando sesión..." /> : children}
