@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { TeamProvider, useTeam } from '../../features/team/TeamContext';
 import TeamChat from './TeamChat';
 import TeamDocs from './TeamDocs';
@@ -12,6 +12,63 @@ const TEAM_TABS = [
     { id: 'docs', label: 'Documentación', icon: 'auto_stories' },
     { id: 'changes', label: 'Cambios', icon: 'campaign' },
 ];
+
+const TeamSelector = ({ teams, currentTeamId, onSelect, onJoin }) => {
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
+    const current = teams.find((t) => t.id === currentTeamId);
+
+    useEffect(() => {
+        if (!open) return;
+        const onClick = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+        document.addEventListener('mousedown', onClick);
+        return () => document.removeEventListener('mousedown', onClick);
+    }, [open]);
+
+    return (
+        <div className="relative" ref={ref}>
+            <button
+                onClick={() => setOpen((o) => !o)}
+                className="flex items-center gap-2 px-2 py-1 rounded-lg hover:bg-[var(--bg-secondary)] transition-colors max-w-[240px]"
+            >
+                <span className="material-symbols-outlined text-[20px] text-indigo-500">groups</span>
+                <span className="text-sm font-bold text-[var(--text-primary)] truncate">{current?.name || 'Equipo'}</span>
+                <Icons.ChevronDown size={15} className={`text-[var(--text-muted)] transition-transform ${open ? 'rotate-180' : ''}`} />
+            </button>
+
+            {open && (
+                <div className="absolute left-0 top-full mt-1 w-64 bg-[var(--bg-secondary)] border border-[var(--border-default)] rounded-xl shadow-2xl py-1.5 z-50 overflow-hidden">
+                    <div className="max-h-64 overflow-y-auto custom-scrollbar">
+                        {teams.map((t) => (
+                            <button
+                                key={t.id}
+                                onClick={() => { onSelect(t.id); setOpen(false); }}
+                                className={`w-full flex items-center gap-2 px-3 py-2 text-sm text-left transition-colors ${
+                                    t.id === currentTeamId
+                                        ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 font-semibold'
+                                        : 'text-[var(--text-primary)] hover:bg-[var(--bg-tertiary)]'
+                                }`}
+                            >
+                                <span className="material-symbols-outlined text-[18px] opacity-70">groups</span>
+                                <span className="truncate flex-1">{t.name}</span>
+                                {t.id === currentTeamId && <Icons.Check size={15} className="text-indigo-500" />}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="border-t border-[var(--border-subtle)] mt-1 pt-1">
+                        <button
+                            onClick={() => { setOpen(false); onJoin(); }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-indigo-500 hover:bg-indigo-500/10 transition-colors font-medium"
+                        >
+                            <Icons.Plus size={16} />
+                            Unirse / crear equipo…
+                        </button>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const TeamViewInner = () => {
     const { teams, teamsLoading, currentTeamId, setCurrentTeamId } = useTeam();
@@ -36,20 +93,12 @@ const TeamViewInner = () => {
             {/* Barra superior: selector de equipo + ajustes */}
             <div className="flex items-center justify-between gap-3 px-6 pt-3 pb-2 border-b border-[var(--border-subtle)] bg-[var(--bg-tertiary)]/40">
                 <div className="flex items-center gap-2 min-w-0">
-                    <span className="material-symbols-outlined text-[20px] text-indigo-500">groups</span>
-                    <select
-                        value={currentTeamId || ''}
-                        onChange={(e) => {
-                            if (e.target.value === '__join__') { setShowJoin(true); return; }
-                            setCurrentTeamId(e.target.value);
-                        }}
-                        className="bg-transparent text-sm font-bold text-[var(--text-primary)] outline-none cursor-pointer max-w-[220px] truncate"
-                    >
-                        {teams.map((t) => (
-                            <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                        <option value="__join__">＋ Unirse / crear equipo…</option>
-                    </select>
+                    <TeamSelector
+                        teams={teams}
+                        currentTeamId={currentTeamId}
+                        onSelect={setCurrentTeamId}
+                        onJoin={() => setShowJoin(true)}
+                    />
                 </div>
                 <button
                     onClick={() => setShowSettings(true)}
