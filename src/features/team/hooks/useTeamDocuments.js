@@ -3,17 +3,14 @@ import { supabase } from '../../../lib/supabaseClient';
 import { STORAGE_BUCKET } from '../constants';
 
 /**
- * Hook de gestión de documentación del equipo.
- * Los documentos están asociados a un workspace (no a un usuario), de modo
- * que todos los miembros ven la misma base de conocimiento.
- *
- * @param {string} workspaceId - ID del workspace activo
- * @param {Object} currentUser - Usuario autenticado
+ * Documentación del equipo (scoped por team_id).
+ * @param {string} teamId - ID del equipo activo
+ * @param {Object} currentUser
  */
-export const useTeamDocuments = (workspaceId, currentUser) => {
+export const useTeamDocuments = (teamId, currentUser) => {
     const queryClient = useQueryClient();
     const userId = currentUser?.id;
-    const queryKey = ['team', 'documents', workspaceId];
+    const queryKey = ['team', 'documents', teamId];
 
     const { data: documents = [], isLoading, error } = useQuery({
         queryKey,
@@ -21,38 +18,31 @@ export const useTeamDocuments = (workspaceId, currentUser) => {
             const { data, error } = await supabase
                 .from('team_documents')
                 .select('*')
-                .eq('workspace_id', workspaceId)
+                .eq('team_id', teamId)
                 .order('created_at', { ascending: false });
             if (error) throw error;
             return data || [];
         },
-        enabled: !!workspaceId,
+        enabled: !!teamId,
         staleTime: 30_000,
     });
 
-    /**
-     * Sube un archivo al bucket de Storage y crea el registro del documento.
-     * @param {File} file
-     * @param {{title:string, description?:string, category:string}} meta
-     */
     const uploadFile = async (file, meta) => {
         const ext = file.name.split('.').pop();
         const safeName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-        const storagePath = `${workspaceId}/${safeName}`;
+        const storagePath = `${teamId}/${safeName}`;
 
         const { error: uploadError } = await supabase.storage
             .from(STORAGE_BUCKET)
             .upload(storagePath, file, { upsert: false, cacheControl: '3600' });
         if (uploadError) throw uploadError;
 
-        const { data: { publicUrl } } = supabase.storage
-            .from(STORAGE_BUCKET)
-            .getPublicUrl(storagePath);
+        const { data: { publicUrl } } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(storagePath);
 
         const { data, error } = await supabase
             .from('team_documents')
             .insert([{
-                workspace_id: workspaceId,
+                team_id: teamId,
                 uploaded_by: userId,
                 title: meta.title,
                 description: meta.description || null,
@@ -75,7 +65,7 @@ export const useTeamDocuments = (workspaceId, currentUser) => {
             const { data, error } = await supabase
                 .from('team_documents')
                 .insert([{
-                    workspace_id: workspaceId,
+                    team_id: teamId,
                     uploaded_by: userId,
                     title: meta.title,
                     description: meta.description || null,
@@ -112,7 +102,6 @@ export const useTeamDocuments = (workspaceId, currentUser) => {
 
     const deleteDocument = useMutation({
         mutationFn: async (doc) => {
-            // Borrar el archivo del bucket si procede
             if (doc.kind === 'file' && doc.storage_path) {
                 await supabase.storage.from(STORAGE_BUCKET).remove([doc.storage_path]);
             }

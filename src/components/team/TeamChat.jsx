@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
-import { useWorkspace } from '../../context/WorkspaceContext';
+import { useTeam } from '../../features/team/TeamContext';
 import { useTeamMessages } from '../../features/team/hooks/useTeamMessages';
-import { buildMemberMap, getMember, formatTime, formatDayLabel } from '../../features/team/utils';
+import { getMember, formatTime, formatDayLabel } from '../../features/team/utils';
 import { Icons } from '../ui/Icons';
 
 const Avatar = ({ member, size = 36 }) => {
@@ -29,20 +29,15 @@ const Avatar = ({ member, size = 36 }) => {
 
 const TeamChat = () => {
     const { currentUser } = useAuth();
-    const { currentWorkspace, workspaceMembers, userRole } = useWorkspace();
+    const { currentTeamId, memberMap, isTeamAdmin } = useTeam();
     const { messages, isLoading, sendMessage, deleteMessage, isSending } = useTeamMessages(
-        currentWorkspace?.id,
+        currentTeamId,
         currentUser
     );
 
     const [text, setText] = useState('');
     const bottomRef = useRef(null);
-    const isAdmin = userRole === 'owner' || userRole === 'admin';
-
-    const memberMap = useMemo(
-        () => buildMemberMap(workspaceMembers, currentUser),
-        [workspaceMembers, currentUser]
-    );
+    const isAdmin = isTeamAdmin;
 
     // Auto-scroll al final cuando llegan mensajes
     useEffect(() => {
