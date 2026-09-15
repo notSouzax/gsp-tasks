@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { getPdfjs } from '../../features/team/pdf';
 
 /**
  * Previsualiza un PDF renderizándolo con PDF.js sobre <canvas>.
@@ -16,9 +17,7 @@ const PdfPreview = ({ url, title }) => {
 
         (async () => {
             try {
-                const pdfjs = await import('pdfjs-dist');
-                const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
-                pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+                const pdfjs = await getPdfjs();
 
                 const res = await fetch(url);
                 if (!res.ok) throw new Error(`HTTP ${res.status}`);

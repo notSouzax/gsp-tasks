@@ -10,6 +10,7 @@ import {
     getMember,
 } from '../../features/team/utils';
 import { Icons } from '../ui/Icons';
+import PdfThumbnail from './PdfThumbnail';
 
 /** Intenta obtener una miniatura para enlaces de YouTube. */
 const getYouTubeThumb = (url) => {
@@ -53,6 +54,8 @@ const DocumentCard = ({ doc, memberMap, canManage, onOpen, onDelete }) => {
             <div className="relative h-36 overflow-hidden">
                 {image ? (
                     <img src={doc.file_url} alt={doc.title} className="w-full h-full object-cover" loading="lazy" />
+                ) : pdf ? (
+                    <PdfThumbnail url={doc.file_url} style={style} />
                 ) : ytThumb ? (
                     <img src={ytThumb} alt={doc.title} className="w-full h-full object-cover" loading="lazy" />
                 ) : (
