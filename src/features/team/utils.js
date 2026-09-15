@@ -46,9 +46,34 @@ export const formatFileSize = (bytes) => {
     return `${size.toFixed(size >= 10 || i === 0 ? 0 : 1)} ${units[i]}`;
 };
 
-export const isImageDoc = (doc) => doc.kind === 'file' && (doc.mime_type || '').startsWith('image/');
-export const isVideoFileDoc = (doc) => doc.kind === 'file' && (doc.mime_type || '').startsWith('video/');
-export const isPdfDoc = (doc) => doc.kind === 'file' && (doc.mime_type || '') === 'application/pdf';
+/** Extensión en minúsculas del archivo (por file_name o por la URL). */
+export const getDocExtension = (doc) => {
+    const source = doc.file_name || doc.file_url || '';
+    const clean = source.split('?')[0].split('#')[0];
+    const parts = clean.split('.');
+    return parts.length > 1 ? parts.pop().toLowerCase() : '';
+};
+
+const IMAGE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'avif', 'ico'];
+const VIDEO_EXTS = ['mp4', 'webm', 'ogg', 'mov', 'm4v'];
+const TEXT_EXTS = ['txt', 'md', 'markdown', 'csv', 'json', 'log', 'xml', 'yml', 'yaml'];
+const OFFICE_EXTS = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'];
+
+// La detección usa el MIME y, como respaldo, la extensión del archivo.
+export const isImageDoc = (doc) =>
+    doc.kind === 'file' && ((doc.mime_type || '').startsWith('image/') || IMAGE_EXTS.includes(getDocExtension(doc)));
+export const isVideoFileDoc = (doc) =>
+    doc.kind === 'file' && ((doc.mime_type || '').startsWith('video/') || VIDEO_EXTS.includes(getDocExtension(doc)));
+export const isPdfDoc = (doc) =>
+    doc.kind === 'file' && ((doc.mime_type || '') === 'application/pdf' || getDocExtension(doc) === 'pdf');
+export const isTextDoc = (doc) =>
+    doc.kind === 'file' && ((doc.mime_type || '').startsWith('text/') || TEXT_EXTS.includes(getDocExtension(doc)));
+export const isOfficeDoc = (doc) =>
+    doc.kind === 'file' && OFFICE_EXTS.includes(getDocExtension(doc));
+
+/** URL del visor de Office Online (requiere que el archivo sea públicamente accesible). */
+export const getOfficeViewerUrl = (fileUrl) =>
+    `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
 
 /**
  * Devuelve una URL de embed para enlaces de YouTube/Vimeo/Loom, o null si no

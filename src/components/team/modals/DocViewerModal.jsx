@@ -1,15 +1,14 @@
 import React from 'react';
 import { getCategory, getCategoryStyle } from '../../../features/team/constants';
 import {
-    isImageDoc,
     isVideoFileDoc,
-    isPdfDoc,
     getVideoEmbedUrl,
     formatFileSize,
     formatDate,
     getMember,
 } from '../../../features/team/utils';
 import { Icons } from '../../ui/Icons';
+import FilePreview from '../FilePreview';
 
 const DocViewerModal = ({ doc, memberMap, onClose }) => {
     if (!doc) return null;
@@ -18,9 +17,7 @@ const DocViewerModal = ({ doc, memberMap, onClose }) => {
     const style = getCategoryStyle(category.color);
     const uploader = getMember(memberMap, doc.uploaded_by);
 
-    const image = isImageDoc(doc);
     const videoFile = isVideoFileDoc(doc);
-    const pdf = isPdfDoc(doc);
     const embedUrl = doc.kind === 'link' ? getVideoEmbedUrl(doc.external_url) : null;
     const openUrl = doc.kind === 'file' ? doc.file_url : doc.external_url;
 
@@ -64,26 +61,20 @@ const DocViewerModal = ({ doc, memberMap, onClose }) => {
                                 />
                             </div>
                         ) : videoFile ? (
-                            <video src={doc.file_url} controls className="w-full max-h-[60vh] bg-black">
+                            <video src={doc.file_url} controls className="w-full max-h-[70vh] bg-black">
                                 Tu navegador no soporta la reproducción de vídeo.
                             </video>
-                        ) : image ? (
-                            <img src={doc.file_url} alt={doc.title} className="w-full max-h-[60vh] object-contain bg-black" />
-                        ) : pdf ? (
-                            <iframe src={doc.file_url} title={doc.title} className="w-full h-[60vh] bg-white" />
-                        ) : (
+                        ) : doc.kind === 'link' ? (
                             <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
                                 <div className={`w-20 h-20 rounded-2xl ${style.bg} flex items-center justify-center`}>
-                                    <span className={`material-symbols-outlined text-[40px] ${style.text}`}>
-                                        {doc.kind === 'link' ? 'link' : 'description'}
-                                    </span>
+                                    <span className={`material-symbols-outlined text-[40px] ${style.text}`}>link</span>
                                 </div>
                                 <p className="text-sm text-[var(--text-secondary)]">
-                                    {doc.kind === 'link'
-                                        ? 'Este contenido se abre en una pestaña nueva.'
-                                        : 'Vista previa no disponible para este tipo de archivo.'}
+                                    Este contenido se abre en una pestaña nueva.
                                 </p>
                             </div>
+                        ) : (
+                            <FilePreview doc={doc} />
                         )}
                     </div>
 
