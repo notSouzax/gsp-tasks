@@ -76,6 +76,24 @@ export const getOfficeViewerUrl = (fileUrl) =>
     `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(fileUrl)}`;
 
 /**
+ * Convierte un adjunto de una publicación de "Cambios" en un objeto compatible
+ * con los componentes de previsualización (DocViewerModal / FilePreview).
+ */
+export const attachmentToDoc = (att, post = {}) => ({
+    id: `${post.id || 'change'}-${att.storage_path || att.external_url || att.name}`,
+    kind: att.kind,
+    title: att.name || 'Adjunto',
+    category: 'cambios',
+    mime_type: att.mime || '',
+    file_url: att.url || null,
+    file_name: att.name || null,
+    file_size: att.size || null,
+    external_url: att.external_url || null,
+    uploaded_by: post.author_id || null,
+    created_at: post.created_at || null,
+});
+
+/**
  * Devuelve una URL de embed para enlaces de YouTube/Vimeo/Loom, o null si no
  * se reconoce (en cuyo caso se tratará como enlace externo normal).
  */

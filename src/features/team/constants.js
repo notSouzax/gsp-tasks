@@ -4,15 +4,19 @@
  * (material-symbols-outlined) y color base para la UI.
  */
 
+// "Cambios" ya no es una categoría de documentación: tiene su propia pestaña
+// (muro/changelog). Se mantiene su metadato para estilos y para resolver
+// documentos antiguos que pudieran tener esta categoría.
+export const CAMBIOS_CATEGORY = {
+    id: 'cambios',
+    label: 'Cambios en el programa',
+    shortLabel: 'Cambios',
+    icon: 'campaign',
+    color: 'indigo',
+    description: 'Novedades y cambios recientes en la aplicación',
+};
+
 export const DOC_CATEGORIES = [
-    {
-        id: 'cambios',
-        label: 'Cambios en el programa',
-        shortLabel: 'Cambios',
-        icon: 'new_releases',
-        color: 'indigo',
-        description: 'Novedades y cambios recientes en la aplicación',
-    },
     {
         id: 'videotutoriales',
         label: 'Videotutoriales',
@@ -39,8 +43,10 @@ export const DOC_CATEGORIES = [
     },
 ];
 
+const ALL_CATEGORIES = [CAMBIOS_CATEGORY, ...DOC_CATEGORIES];
+
 export const getCategory = (id) =>
-    DOC_CATEGORIES.find((c) => c.id === id) || DOC_CATEGORIES[2];
+    ALL_CATEGORIES.find((c) => c.id === id) || DOC_CATEGORIES[1];
 
 /**
  * Clases de Tailwind por color de categoría. Se definen de forma estática
