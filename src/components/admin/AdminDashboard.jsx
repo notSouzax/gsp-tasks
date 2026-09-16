@@ -241,6 +241,50 @@ const CreateUserModal = ({ admin, onClose }) => {
 };
 
 // ============ EQUIPOS ============
+const AdminTeamRow = ({ team, count, admin, onDelete }) => {
+    const [editing, setEditing] = useState(false);
+    const [name, setName] = useState(team.name);
+
+    const save = async () => {
+        const value = name.trim();
+        if (!value || value === team.name) { setEditing(false); setName(team.name); return; }
+        try { await admin.renameTeam(team.id, value); toast.success('Nombre actualizado'); setEditing(false); }
+        catch { toast.error('No se pudo renombrar'); }
+    };
+
+    return (
+        <div className="flex items-center gap-3 p-3 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-xl">
+            <span className="material-symbols-outlined text-[22px] text-indigo-500">groups</span>
+            <div className="min-w-0 flex-1">
+                {editing ? (
+                    <input
+                        autoFocus
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape') { setEditing(false); setName(team.name); } }}
+                        onBlur={save}
+                        className="w-full bg-[var(--bg-tertiary)] border border-indigo-500 rounded-lg px-2 py-1 text-sm text-[var(--text-primary)] outline-none"
+                    />
+                ) : (
+                    <div className="flex items-center gap-1.5 group">
+                        <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{team.name}</p>
+                        <button onClick={() => setEditing(true)} className="text-[var(--text-muted)] hover:text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity" title="Renombrar">
+                            <Icons.Edit size={13} />
+                        </button>
+                    </div>
+                )}
+                <p className="text-xs text-[var(--text-muted)]">{count} miembro(s)</p>
+            </div>
+            <div className="flex items-center gap-2">
+                <span className="text-[10px] text-[var(--text-muted)] uppercase">Clave</span>
+                <code className="font-mono text-sm tracking-widest text-[var(--text-primary)] bg-[var(--bg-tertiary)] rounded-lg px-2.5 py-1">{team.access_code}</code>
+                <button onClick={() => { navigator.clipboard?.writeText(team.access_code); toast.success('Copiado'); }} className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-indigo-500" title="Copiar clave"><Icons.Copy size={14} /></button>
+                <button onClick={onDelete} className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10" title="Eliminar equipo"><Icons.Trash2 size={15} /></button>
+            </div>
+        </div>
+    );
+};
+
 const TeamsTab = ({ admin }) => {
     const { teams, memberships } = admin;
     const [name, setName] = useState('');
@@ -278,19 +322,7 @@ const TeamsTab = ({ admin }) => {
 
             <div className="space-y-2">
                 {teams.map((t) => (
-                    <div key={t.id} className="flex items-center gap-3 p-3 bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-xl">
-                        <span className="material-symbols-outlined text-[22px] text-indigo-500">groups</span>
-                        <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-[var(--text-primary)] truncate">{t.name}</p>
-                            <p className="text-xs text-[var(--text-muted)]">{countByTeam[t.id] || 0} miembro(s)</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-[var(--text-muted)] uppercase">Clave</span>
-                            <code className="font-mono text-sm tracking-widest text-[var(--text-primary)] bg-[var(--bg-tertiary)] rounded-lg px-2.5 py-1">{t.access_code}</code>
-                            <button onClick={() => { navigator.clipboard?.writeText(t.access_code); toast.success('Copiado'); }} className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-secondary)] hover:text-indigo-500" title="Copiar clave"><Icons.Copy size={14} /></button>
-                            <button onClick={() => setTeamToDelete(t)} className="w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-red-500 hover:bg-red-500/10" title="Eliminar equipo"><Icons.Trash2 size={15} /></button>
-                        </div>
-                    </div>
+                    <AdminTeamRow key={t.id} team={t} count={countByTeam[t.id] || 0} admin={admin} onDelete={() => setTeamToDelete(t)} />
                 ))}
             </div>
 
