@@ -192,7 +192,7 @@ export const TeamProvider = ({ children }) => {
     };
 
     const renameTeam = async (name) => {
-        const { error } = await supabase.from('teams').update({ name }).eq('id', currentTeamId);
+        const { error } = await supabase.rpc('rename_team', { p_team: currentTeamId, p_name: name });
         if (error) throw error;
         refreshTeams();
     };
