@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { AutomationList } from '../features/automations';
+import { FEATURES } from '../config/features';
 
 const CONTEXT_TABS = [
     { id: 'boards', label: 'Tableros', icon: 'view_kanban' },
-    { id: 'crm', label: 'CRM', icon: 'handshake' },
+    ...(FEATURES.crm ? [{ id: 'crm', label: 'CRM', icon: 'handshake' }] : []),
     { id: 'calendar', label: 'Calendario', icon: 'calendar_month' },
 ];
 
