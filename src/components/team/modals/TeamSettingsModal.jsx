@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useTeam } from '../../../features/team/TeamContext';
 import { useAuth } from '../../../context/AuthContext';
@@ -32,11 +32,20 @@ const CopyRow = ({ label, value, hint }) => {
 const TeamSettingsModal = ({ onClose }) => {
     const { currentUser } = useAuth();
     const {
-        currentTeam, isTeamAdmin, members, invitations,
-        regenerateCode, createInvitation, revokeInvitation,
+        currentTeam, isTeamAdmin, canManage, members, invitations,
+        regenerateCode, renameTeam, createInvitation, revokeInvitation,
         updateMemberRole, removeMember, leaveTeam,
     } = useTeam();
     const [busy, setBusy] = useState(false);
+    const [name, setName] = useState(currentTeam?.name || '');
+    useEffect(() => { setName(currentTeam?.name || ''); }, [currentTeam?.name]);
+
+    const handleRename = async () => {
+        const value = name.trim();
+        if (!value || value === currentTeam?.name) return;
+        try { await renameTeam(value); toast.success('Nombre actualizado'); }
+        catch { toast.error('No se pudo actualizar el nombre'); }
+    };
 
     const handleRegenerate = async () => {
         if (!window.confirm('¿Cambiar la clave de acceso? La anterior dejará de funcionar.')) return;
@@ -84,6 +93,28 @@ const TeamSettingsModal = ({ onClose }) => {
                 </div>
 
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
+                    {/* Nombre del equipo (admins y editores) */}
+                    {canManage && (
+                        <div>
+                            <label className="block text-xs font-semibold text-[var(--text-muted)] uppercase tracking-wider mb-1.5">Nombre del equipo</label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleRename()}
+                                    className="flex-1 bg-[var(--bg-tertiary)] border border-[var(--border-default)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] outline-none focus:border-indigo-500"
+                                />
+                                <button
+                                    onClick={handleRename}
+                                    disabled={!name.trim() || name.trim() === currentTeam?.name}
+                                    className="px-3 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white rounded-lg"
+                                >
+                                    Guardar
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     {isTeamAdmin && (
                         <>
                             {/* Clave de acceso */}
