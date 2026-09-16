@@ -4,6 +4,7 @@ import { Icons } from './ui/Icons';
 import logo from '../assets/logo.jpg';
 import SettingsModal from './modals/SettingsModal';
 import { useAuth } from '../context/AuthContext';
+import { FEATURES } from '../config/features';
 
 const Sidebar = () => {
     const [isCollapsed, setIsCollapsed] = useState(false);
@@ -67,14 +68,16 @@ const Sidebar = () => {
                         <span className="material-symbols-outlined text-[20px]">view_kanban</span>
                         {!isCollapsed && <span className="text-sm font-medium">Tableros</span>}
                     </NavItem>
-                    <NavItem
-                        to="/crm"
-                        title="CRM"
-                        collapsed={isCollapsed}
-                    >
-                        <span className="material-symbols-outlined text-[20px]">handshake</span>
-                        {!isCollapsed && <span className="text-sm font-medium">CRM</span>}
-                    </NavItem>
+                    {FEATURES.crm && (
+                        <NavItem
+                            to="/crm"
+                            title="CRM"
+                            collapsed={isCollapsed}
+                        >
+                            <span className="material-symbols-outlined text-[20px]">handshake</span>
+                            {!isCollapsed && <span className="text-sm font-medium">CRM</span>}
+                        </NavItem>
+                    )}
                     <NavItem
                         to="/equipo"
                         title="Equipo"
