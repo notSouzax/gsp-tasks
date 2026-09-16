@@ -7,6 +7,7 @@ import ConfirmationModal from './modals/ConfirmationModal';
 import EventModal, { EVENT_COLORS } from './modals/EventModal';
 import { useAuth } from '../context/AuthContext';
 import { useCalendarQueries } from '../hooks/useCalendarQueries';
+import { FEATURES } from '../config/features';
 import toast from 'react-hot-toast';
 
 const MiniCalendar = ({ currentReferenceDate, onDateSelect }) => {
@@ -183,7 +184,7 @@ const Calendar = () => {
     } = useCalendarQueries(user, currentDate, view);
 
     const [showCRMActivities, setShowCRMActivities] = useState(true);
-    const [showCRMOpportunities, setShowCRMOpportunities] = useState(true);
+    const [showCRMOpportunities] = useState(true);
     const [showEventModal, setShowEventModal] = useState(false);
     const [selectedDate, setSelectedDate] = useState(null);
     const [activeId, setActiveId] = useState(null);
@@ -420,7 +421,7 @@ const Calendar = () => {
     const crmIntegration = integrations.find(i => i.slug === 'crm') || { name: 'Actividades CRM', color: 'purple' };
 
     // Transform CRM activities to calendar event format
-    const crmEventsForCalendar = showCRMActivities ? crmActivities.map(activity => {
+    const crmEventsForCalendar = FEATURES.crm && showCRMActivities ? crmActivities.map(activity => {
         const dueDate = activity.due_date ? new Date(activity.due_date) : null;
         const activityTypeIcons = { call: 'ðŸ“ž', meeting: 'ðŸ‘¥', email: 'ðŸ“§', task: 'âœ…', note: 'ðŸ“', deadline: 'â°' };
 
@@ -438,7 +439,7 @@ const Calendar = () => {
     }).filter(e => e.date) : [];
 
     // Transform CRM opportunities to calendar event format
-    const crmOppEventsForCalendar = showCRMOpportunities ? crmOpportunities.map(opp => {
+    const crmOppEventsForCalendar = FEATURES.crm && showCRMOpportunities ? crmOpportunities.map(opp => {
         const closeDate = opp.expected_close_date ? new Date(opp.expected_close_date) : null;
         const probEmoji = opp.probability >= 70 ? 'ðŸŸ¢' : opp.probability >= 40 ? 'ðŸŸ¡' : 'ðŸ”´';
 
@@ -679,6 +680,7 @@ const Calendar = () => {
 
                     <div className="mt-8 space-y-6">
                         {/* CRM Activities Toggle */}
+                        {FEATURES.crm && (
                         <div>
                             {editingIntegration?.slug === 'crm' ? (
                                 <div className="mb-2 p-3 bg-slate-800/60 rounded-xl border border-blue-500/30 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -754,6 +756,7 @@ const Calendar = () => {
                                 </label>
                             )}
                         </div>
+                        )}
 
                         <div>
                             <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-3">
